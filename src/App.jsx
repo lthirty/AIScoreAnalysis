@@ -183,20 +183,38 @@ function writeJsonStorage(key, value) {
   }
 }
 
-function getStoredUser() {
-  return readJsonStorage(STORAGE_KEYS.user, null)
+function getUserId(user) {
+  return user?.id || user?.openid || ''
 }
 
-function saveUser(user) {
-  if (user) {
-    writeJsonStorage(STORAGE_KEYS.user, user)
-  } else {
-    window.localStorage.removeItem(STORAGE_KEYS.user)
+function normalizeUser(user) {
+  if (!user || typeof user !== 'object') return null
+
+  const id = getUserId(user)
+  if (!id) return null
+
+  return {
+    ...user,
+    id,
+    openid: user.openid || id,
+    nickname: user.nickname || '学生用户',
+    loginType: user.loginType || 'mock-wechat',
+    loginAt: user.loginAt || user.loginTime || new Date().toISOString()
   }
 }
 
-function getUserId(user) {
-  return user?.id || user?.openid || ''
+function getStoredUser() {
+  return normalizeUser(readJsonStorage(STORAGE_KEYS.user, null))
+}
+
+function saveUser(user) {
+  const normalizedUser = normalizeUser(user)
+
+  if (normalizedUser) {
+    writeJsonStorage(STORAGE_KEYS.user, normalizedUser)
+  } else {
+    window.localStorage.removeItem(STORAGE_KEYS.user)
+  }
 }
 
 function sortExamRecords(records) {
@@ -580,34 +598,13 @@ function UserLogin({ user, onLogin, onLogout }) {
   const [loading, setLoading] = useState(false)
 
   const loginAsMockUser = (userKey) => {
+    setLoading(false)
     onLogin(createMockWechatUser(userKey))
   }
 
-  const handleWechatLogin = async () => {
+  const handleWechatLogin = () => {
     setLoading(true)
-    try {
-      if (typeof wx !== 'undefined' && wx.login) {
-        wx.login({
-          success: (res) => {
-            if (res.code) {
-              onLogin({
-                id: `mock_${res.code}`,
-                openid: `mock_${res.code}`,
-                nickname: '学生用户',
-                loginType: 'wechat-miniprogram',
-                avatar: '',
-                loginTime: new Date().toISOString()
-              })
-            }
-          },
-          fail: () => loginAsMockUser('rayna')
-        })
-      } else {
-        loginAsMockUser('rayna')
-      }
-    } finally {
-      setLoading(false)
-    }
+    window.setTimeout(() => loginAsMockUser('rayna'), 0)
   }
 
   if (user) {
@@ -621,7 +618,7 @@ function UserLogin({ user, onLogin, onLogout }) {
             <p className="text-sm font-medium text-gray-800 truncate">{user.nickname}</p>
             <p className="text-xs text-gray-500">模拟微信账号 · 历史成绩独立保存</p>
           </div>
-          <button onClick={onLogout} className="text-xs text-gray-400 hover:text-gray-600">
+          <button type="button" onClick={onLogout} className="text-xs text-gray-400 hover:text-gray-600">
             退出
           </button>
         </div>
@@ -630,6 +627,7 @@ function UserLogin({ user, onLogin, onLogout }) {
             const active = getUserId(user) === profile.id
             return (
               <button
+                type="button"
                 key={profile.id}
                 onClick={() => loginAsMockUser(key)}
                 className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -650,9 +648,10 @@ function UserLogin({ user, onLogin, onLogout }) {
       <div className="flex items-center justify-between gap-3 mb-3">
         <div>
           <p className="text-sm font-semibold text-gray-800">调试微信登录</p>
-          <p className="text-xs text-gray-500 mt-1">选择 Rayna 或 Xulei，验证多账号历史成绩和趋势分析。</p>
+          <p className="text-xs text-gray-500 mt-1">当前使用本地模拟登录，选择 Rayna 或 Xulei 验证多账号历史成绩和趋势分析。</p>
         </div>
         <button
+          type="button"
           onClick={handleWechatLogin}
           disabled={loading}
           className="shrink-0 flex items-center justify-center gap-1 px-3 py-2 bg-[#07c160] text-white rounded-lg text-xs hover:bg-[#06ad56] transition-colors"
@@ -664,6 +663,7 @@ function UserLogin({ user, onLogin, onLogout }) {
       <div className="grid grid-cols-2 gap-2">
         {Object.entries(MOCK_WECHAT_USERS).map(([key, profile]) => (
           <button
+            type="button"
             key={profile.id}
             onClick={() => loginAsMockUser(key)}
             className="rounded-lg px-3 py-2 text-sm font-medium bg-gray-100 text-gray-700 hover:bg-[#07c160] hover:text-white transition-colors"
@@ -2378,9 +2378,12 @@ export default function App() {
   })
 
   const handleLogin = (userData) => {
-    setUser(userData)
-    saveUser(userData)
-    setHistory(getStoredRecords(getUserId(userData)))
+    const nextUser = normalizeUser(userData)
+    if (!nextUser) return
+
+    setUser(nextUser)
+    saveUser(nextUser)
+    setHistory(getStoredRecords(getUserId(nextUser)))
   }
 
   const handleLogout = () => {

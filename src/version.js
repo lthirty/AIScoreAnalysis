@@ -3,11 +3,21 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.8.0';
+export const VERSION = '1.8.1';
 export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-16';
+export const BUILD_NUMBER = '20260511-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.1',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      '调试阶段微信登录改为固定本地模拟登录，不再调用wx.login',
+      '增加本地存储用户校验和规范化，避免异常历史登录状态影响进入页面',
+      '登录按钮补充button类型，减少表单或浏览器默认行为干扰'
+    ]
+  },
   {
     version: '1.8.0',
     date: '2026-05-11',
