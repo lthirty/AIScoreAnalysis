@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   Upload,
   Camera,
@@ -16,7 +16,8 @@ import {
   Zap,
   Crown,
   RefreshCw,
-  PencilLine
+  PencilLine,
+  LogIn
 } from 'lucide-react'
 import { VERSION, BUILD_DATE } from './version.js'
 
@@ -93,6 +94,28 @@ const ANALYSIS_PROVIDER = {
   model: 'qwen-max-latest'
 }
 
+const STORAGE_KEYS = {
+  user: 'AIScoreAnalysis:user',
+  records: 'AIScoreAnalysis:examRecords'
+}
+
+const MOCK_WECHAT_USERS = {
+  rayna: {
+    id: 'mock-wechat-rayna',
+    openid: 'mock_openid_rayna',
+    nickname: 'Rayna',
+    loginType: 'mock-wechat',
+    avatar: ''
+  },
+  xulei: {
+    id: 'mock-wechat-xulei',
+    openid: 'mock_openid_xulei',
+    nickname: 'Xulei',
+    loginType: 'mock-wechat',
+    avatar: ''
+  }
+}
+
 function defaultImageSlot() {
   return { file: null, preview: '' }
 }
@@ -106,8 +129,71 @@ function defaultMeta() {
   }
 }
 
+// 获取用户信息
+function getStoredUser() {
+  return readJsonStorage(STORAGE_KEYS.user, null)
+}
+
+// 保存用户信息
+function saveUser(user) {
+  if (user) {
+    writeJsonStorage(STORAGE_KEYS.user, user)
+  } else {
+    window.localStorage.removeItem(STORAGE_KEYS.user)
+  }
+}
+
 function getEmptyScores() {
   return SUBJECTS.map(subject => ({ subject, score: '', fullScore: '' }))
+}
+
+function readJsonStorage(key, fallback) {
+  try {
+    const value = window.localStorage.getItem(key)
+    return value ? JSON.parse(value) : fallback
+  } catch (error) {
+    console.warn('Failed to read storage:', error)
+    return fallback
+  }
+}
+
+function writeJsonStorage(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch (error) {
+    console.warn('Failed to write storage:', error)
+  }
+}
+
+function getUserId(user) {
+  return user?.id || user?.openid || ''
+}
+
+function sortExamRecords(records) {
+  return [...records].sort((a, b) => {
+    const aTime = new Date(a.examDate || a.date || a.createdAt || 0).getTime()
+    const bTime = new Date(b.examDate || b.date || b.createdAt || 0).getTime()
+    return bTime - aTime
+  })
+}
+
+function getStoredRecords(userId) {
+  const allRecords = readJsonStorage(STORAGE_KEYS.records, {})
+  return sortExamRecords(allRecords[userId] || [])
+}
+
+function setStoredRecords(userId, records) {
+  const allRecords = readJsonStorage(STORAGE_KEYS.records, {})
+  allRecords[userId] = sortExamRecords(records).slice(0, 30)
+  writeJsonStorage(STORAGE_KEYS.records, allRecords)
+}
+
+function createMockWechatUser(userKey) {
+  const profile = MOCK_WECHAT_USERS[userKey] || MOCK_WECHAT_USERS.rayna
+  return {
+    ...profile,
+    loginAt: new Date().toISOString()
+  }
 }
 
 function getCityProfile(city) {
@@ -246,6 +332,302 @@ function generateSubjectSelection(scores) {
       '如果政治成绩突出且目标偏法学、警校、公共管理，可评估物化政。'
     ]
   }
+}
+
+function buildTrendAnalysis(records, currentScores) {
+  if (!records || records.length === 0) {
+    return {
+      summary: '暂无历史考试记录，本次保存后将作为趋势分析基准。',
+      items: []
+    }
+  }
+
+  const lastRecord = sortExamRecords(records)[0]
+  const lastScores = (lastRecord.scores || []).reduce((acc, item) => {
+    acc[item.subject] = toNumber(item.score) || 0
+    return acc
+  }, {})
+
+  const items = currentScores
+    .map(item => {
+      const previous = lastScores[item.subject]
+      const current = toNumber(item.score) || 0
+
+      if (!previous) {
+        return {
+          subject: item.subject,
+          previous: null,
+          current,
+          diff: null,
+          status: '新增记录'
+        }
+      }
+
+      const diff = Math.round((current - previous) * 10) / 10
+      return {
+        subject: item.subject,
+        previous,
+        current,
+        diff,
+        status: diff > 0 ? '进步' : diff < 0 ? '退步' : '持平'
+      }
+    })
+    .filter(item => item.subject)
+
+  const improved = items.filter(item => item.diff !== null && item.diff > 0)
+  const declined = items.filter(item => item.diff !== null && item.diff < 0)
+
+  return {
+    summary: `已对比上一次考试：${improved.length} 科进步，${declined.length} 科退步，${items.length - improved.length - declined.length} 科持平或新增。`,
+    items
+  }
+}
+
+// 用户登录组件
+function UserLogin({ user, onLogin, onLogout }) {
+  const [loading, setLoading] = useState(false)
+
+  const loginAsMockUser = (userKey) => {
+    onLogin(createMockWechatUser(userKey))
+  }
+
+  const handleWechatLogin = async () => {
+    setLoading(true)
+    try {
+      // 微信小程序环境登录
+      if (typeof wx !== 'undefined' && wx.login) {
+        wx.login({
+          success: async (res) => {
+            if (res.code) {
+              // 发送 code 到后端获取 openid
+              // 这里模拟后端返回
+              const mockUser = {
+                id: 'mock_' + res.code,
+                openid: 'mock_' + res.code,
+                nickname: '学生用户',
+                loginType: 'wechat-miniprogram',
+                avatar: '',
+                loginTime: new Date().toISOString()
+              }
+              onLogin(mockUser)
+            }
+          },
+          fail: () => {
+            // 小程序登录失败，尝试网页授权
+            simulateWebLogin()
+          }
+        })
+      } else {
+        // H5 网页环境 - 模拟登录
+        simulateWebLogin()
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const simulateWebLogin = () => {
+    onLogin(createMockWechatUser('rayna'))
+  }
+
+  if (user) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+            <span className="text-primary text-sm font-medium">{user.nickname?.[0] || '用户'}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-800 truncate">{user.nickname}</p>
+            <p className="text-xs text-gray-500">模拟微信账号 · 历史成绩独立保存</p>
+          </div>
+          <button
+            onClick={onLogout}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            退出
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          {Object.entries(MOCK_WECHAT_USERS).map(([key, profile]) => {
+            const active = getUserId(user) === profile.id
+            return (
+              <button
+                key={profile.id}
+                onClick={() => loginAsMockUser(key)}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-[#07c160] text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {profile.nickname}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-3">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-800">调试微信登录</p>
+          <p className="text-xs text-gray-500 mt-1">选择 Rayna 或 Xulei，验证多账号历史成绩和趋势分析。</p>
+        </div>
+        <button
+          onClick={handleWechatLogin}
+          disabled={loading}
+          className="shrink-0 flex items-center justify-center gap-1 px-3 py-2 bg-[#07c160] text-white rounded-lg text-xs hover:bg-[#06ad56] transition-colors"
+        >
+          {loading ? (
+            <RefreshCw size={14} className="animate-spin" />
+          ) : (
+            <LogIn size={14} />
+          )}
+          <span>{loading ? '登录中' : '默认登录'}</span>
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {Object.entries(MOCK_WECHAT_USERS).map(([key, profile]) => (
+          <button
+            key={profile.id}
+            onClick={() => loginAsMockUser(key)}
+            className="rounded-lg px-3 py-2 text-sm font-medium bg-gray-100 text-gray-700 hover:bg-[#07c160] hover:text-white transition-colors"
+          >
+            {profile.nickname}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// 趋势分析组件
+function TrendAnalysis({ history, city, grade }) {
+  const [showTrend, setShowTrend] = useState(false)
+
+  if (history.length === 0) {
+    return (
+      <div className="bg-gray-50 rounded-xl p-4 text-center">
+        <p className="text-sm text-gray-500">暂无历史成绩记录</p>
+        <p className="text-xs text-gray-400 mt-1">完成至少一次分析后自动保存</p>
+      </div>
+    )
+  }
+
+  // 计算趋势数据
+  const recentHistory = history.slice(0, 10) // 最近10次
+  const avgScore = recentHistory.reduce((sum, h) => sum + (h.totalScore || 0), 0) / recentHistory.length
+  const latestScore = recentHistory[0]?.totalScore || 0
+  const firstScore = recentHistory[recentHistory.length - 1]?.totalScore || 0
+  const scoreChange = latestScore - firstScore
+  const scoreChangePercent = firstScore > 0 ? ((scoreChange / firstScore) * 100).toFixed(1) : 0
+
+  // 科目趋势
+  const subjectTrends = {}
+  recentHistory.forEach(h => {
+    if (h.scores) {
+      h.scores.forEach(s => {
+        if (!subjectTrends[s.subject]) {
+          subjectTrends[s.subject] = []
+        }
+        subjectTrends[s.subject].push({ score: s.score, date: h.date })
+      })
+    }
+  })
+
+  return (
+    <div className="bg-white rounded-xl shadow-md p-4 border border-indigo-100">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={18} className="text-primary" />
+          <h3 className="font-semibold text-gray-800">历史趋势</h3>
+        </div>
+        <button
+          onClick={() => setShowTrend(!showTrend)}
+          className="text-xs text-primary hover:text-indigo-600"
+        >
+          {showTrend ? '收起' : '查看详情'}
+        </button>
+      </div>
+
+      {/* 概览卡片 */}
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="bg-indigo-50 rounded-xl p-3 text-center">
+          <p className="text-xl font-bold text-primary">{recentHistory.length}</p>
+          <p className="text-xs text-gray-500">考试次数</p>
+        </div>
+        <div className="bg-green-50 rounded-xl p-3 text-center">
+          <p className={`text-xl font-bold ${scoreChange >= 0 ? 'text-success' : 'text-red-500'}`}>
+            {scoreChange >= 0 ? '+' : ''}{scoreChangePercent}%
+          </p>
+          <p className="text-xs text-gray-500">分数变化</p>
+        </div>
+        <div className="bg-amber-50 rounded-xl p-3 text-center">
+          <p className="text-xl font-bold text-amber-600">{avgScore.toFixed(0)}</p>
+          <p className="text-xs text-gray-500">平均分</p>
+        </div>
+      </div>
+
+      {/* 简易趋势线 */}
+      <div className="h-16 flex items-end gap-1 mb-4">
+        {recentHistory.slice().reverse().map((h, i) => {
+          const maxScore = Math.max(...recentHistory.map(x => x.totalScore || 0))
+          const height = maxScore > 0 ? ((h.totalScore || 0) / maxScore) * 100 : 0
+          return (
+            <div
+              key={h.id}
+              className="flex-1 bg-primary/20 hover:bg-primary/40 rounded-t transition-colors"
+              style={{ height: `${Math.max(height, 10)}%` }}
+              title={`${h.date}: ${h.totalScore}分`}
+            />
+          )
+        })}
+      </div>
+
+      {/* 详细趋势 */}
+      {showTrend && (
+        <div className="space-y-4 pt-4 border-t border-gray-100">
+          <p className="text-sm font-medium text-gray-700">各科趋势</p>
+          {Object.entries(subjectTrends).slice(0, 5).map(([subject, data]) => {
+            const scores = data.map(d => d.score).filter(Boolean)
+            const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0
+            const trend = scores.length > 1 ? scores[0] - scores[scores.length - 1] : 0
+            return (
+              <div key={subject} className="flex items-center gap-3">
+                <span className="text-sm text-gray-600 w-12">{subject}</span>
+                <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${trend >= 0 ? 'bg-success/50' : 'bg-red-400/50'}`}
+                    style={{ width: `${Math.min((avg / 150) * 100, 100)}%` }}
+                  />
+                </div>
+                <span className={`text-xs font-medium ${trend >= 0 ? 'text-success' : 'text-red-500'}`}>
+                  {trend >= 0 ? '+' : ''}{trend.toFixed(0)}
+                </span>
+              </div>
+            )
+          })}
+
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-sm font-medium text-gray-700 mb-2">考试记录</p>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {recentHistory.map((h, i) => (
+                <div key={h.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="text-gray-500">{h.date}</span>
+                  <span className="font-medium text-gray-700">{h.totalScore}分</span>
+                  <span className="text-gray-400">{h.city || ''}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function StepIndicator({ currentStep }) {
@@ -527,6 +909,22 @@ function GradeSelector({ value, onChange }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function DateSelector({ value, onChange }) {
+  const today = new Date().toISOString().split('T')[0]
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">考试日期</label>
+      <input
+        type="date"
+        value={value || today}
+        onChange={(e) => onChange(e.target.value)}
+        max={today}
+        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 hover:border-primary transition-colors focus:outline-none focus:border-primary"
+      />
     </div>
   )
 }
@@ -1216,7 +1614,7 @@ function normalizeOcrPayload(payload, type) {
   }
 }
 
-function buildAnalysis(myScores, maxScores, meta, city, grade, modelTrace = {}) {
+function buildAnalysis(myScores, maxScores, meta, city, grade, modelTrace = {}, historicalRecords = []) {
   const validScores = myScores
     .map(item => ({
       subject: normalizeSubject(item.subject),
@@ -1236,6 +1634,7 @@ function buildAnalysis(myScores, maxScores, meta, city, grade, modelTrace = {}) 
   const cityProfile = getCityProfile(city)
   const gradeProfile = getGradeProfile(grade)
   const subjectSelection = isSeniorGrade(grade) ? generateSubjectSelection(validScores) : null
+  const trendAnalysis = buildTrendAnalysis(historicalRecords, validScores)
 
   let ranking = '前50%'
   if (gradeRank && gradeRank <= 30) ranking = '年级前列'
@@ -1328,6 +1727,7 @@ function buildAnalysis(myScores, maxScores, meta, city, grade, modelTrace = {}) 
     classRank,
     gradeRank,
     subjectSelection,
+    trendAnalysis,
     modelTrace,
     calculation: {
       totalScoreFormula: `${validScores.map(item => `${item.subject}${item.score}`).join(' + ')} = ${totalScore}`,
@@ -1375,6 +1775,7 @@ export default function App() {
   const [meta, setMeta] = useState(defaultMeta)
   const [city, setCity] = useState('杭州')
   const [grade, setGrade] = useState('高一')
+  const [examDate, setExamDate] = useState(new Date().toISOString().split('T')[0])
   const [error, setError] = useState(null)
   const [warnings, setWarnings] = useState([])
   const [aiProvider, setAiProvider] = useState('aliyun')
@@ -1385,6 +1786,33 @@ export default function App() {
     deepseek: ''
   })
   const [analysis, setAnalysis] = useState(null)
+
+  // 用户和历史记录状态
+  const [user, setUser] = useState(() => getStoredUser())
+  const [history, setHistory] = useState(() => {
+    const storedUser = getStoredUser()
+    return storedUser ? getStoredRecords(getUserId(storedUser)) : []
+  })
+
+  // 动态设置页面标题（根据端口区分分支）
+  useEffect(() => {
+    const isClaudeBranch = window.location.port === '5174'
+    const branchPrefix = isClaudeBranch ? 'Claude分支-' : ''
+    document.title = `${branchPrefix}AI 成绩分析 - 让学习更有方向`
+  }, [])
+
+  // 登录/登出处理
+  const handleLogin = (userData) => {
+    setUser(userData)
+    saveUser(userData)
+    setHistory(getStoredRecords(getUserId(userData)))
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+    setHistory([])
+    saveUser(null)
+  }
 
   const handleImageSelect = (type, file) => {
     const preview = URL.createObjectURL(file)
@@ -1604,7 +2032,7 @@ export default function App() {
       visionModel: inputMode === 'upload' ? `${AI_PROVIDERS[aiProvider].name} ${AI_PROVIDERS[aiProvider].model}` : '手动输入，未使用图片识别模型',
       analysisModel: `${ANALYSIS_PROVIDER.name} ${ANALYSIS_PROVIDER.model}`
     }
-    const nextAnalysis = buildAnalysis(normalizedMyScores, normalizedMaxScores, meta, city, grade, modelTrace)
+    const nextAnalysis = buildAnalysis(normalizedMyScores, normalizedMaxScores, meta, city, grade, modelTrace, history)
     if (!nextAnalysis) {
       setError('分析所需数据不足，请检查识别结果')
       return
@@ -1628,6 +2056,30 @@ export default function App() {
       setAnalysis(nextAnalysis)
     } finally {
       setAnalyzing(false)
+      // 保存到历史记录
+      if (user) {
+        const userId = getUserId(user)
+        const totalScore = nextAnalysis?.totalScore || normalizedMyScores.reduce((sum, s) => sum + s.score, 0)
+        const nextHistory = sortExamRecords([
+          {
+            id: `${userId}-${Date.now()}`,
+            userId,
+            openid: user.openid,
+            nickname: user.nickname,
+            date: examDate,
+            examDate,
+            city,
+            grade,
+            totalScore,
+            scores: normalizedMyScores,
+            maxScores: normalizedMaxScores,
+            createdAt: new Date().toISOString()
+          },
+          ...getStoredRecords(userId)
+        ]).slice(0, 30)
+        setStoredRecords(userId, nextHistory)
+        setHistory(nextHistory)
+      }
       setStep(2)
     }
   }
@@ -1683,6 +2135,11 @@ export default function App() {
       <div className="max-w-5xl mx-auto h-full flex flex-col">
         <AIAnalysisBanner />
 
+        {/* 用户登录区域 */}
+        <div className="mb-3">
+          <UserLogin user={user} onLogin={handleLogin} onLogout={handleLogout} />
+        </div>
+
         <StepIndicator currentStep={step} />
 
         {step === 0 && (
@@ -1695,9 +2152,10 @@ export default function App() {
                 onCustomKeyChange={handleCustomKeyChange}
               />
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <CitySelector value={city} onChange={setCity} />
                 <GradeSelector value={grade} onChange={setGrade} />
+                <DateSelector value={examDate} onChange={setExamDate} />
               </div>
 
               <ModeChoice mode={inputMode} onChange={handleInputModeChange} />
@@ -1896,6 +2354,7 @@ export default function App() {
             )}
 
             <FreeAnalysisCard analysis={analysis} />
+            {user && <TrendAnalysis history={history} city={city} grade={grade} />}
             <SubjectSelectionCard selection={analysis.subjectSelection} />
             <AnalysisEvidenceCard analysis={analysis} />
 

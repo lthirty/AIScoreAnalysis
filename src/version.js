@@ -3,11 +3,39 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.6.3';
+export const VERSION = '1.7.3';
 export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-04';
+export const BUILD_NUMBER = '20260511-09';
 
 export const CHANGELOG = [
+  {
+    version: '1.7.3',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      '新增 Rayna / Xulei 两个模拟微信测试账号',
+      '历史成绩按模拟微信账号独立保存，避免多用户数据混用',
+      '趋势分析改为读取当前账号历史成绩，并优先对比最近一次考试'
+    ]
+  },
+  {
+    version: '1.7.2',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      '同步 package、HTML 和应用版本号',
+      '重新构建 dist 产物，确保直接打开 dist/index.html 可以加载页面'
+    ]
+  },
+  {
+    version: '1.7.1',
+    date: '2026-05-11',
+    author: 'Claude',
+    changes: [
+      '新增考试日期选择器（城市、年级、日期三列布局）',
+      '历史记录中的成绩现在包含examDate字段'
+    ]
+  },
   {
     version: '1.6.3',
     date: '2026-05-11',
