@@ -223,6 +223,8 @@ function buildTrendDataset(records) {
         return {
           date: getExamDate(record),
           score: totalScore,
+          classRank: toNumber(record.classRank),
+          gradeRank: toNumber(record.gradeRank),
           label: formatDateLabel(getExamDate(record))
         }
       })
@@ -316,6 +318,8 @@ function buildTrendAnalysis(records, currentScores, currentRecordMeta = {}) {
       examDate: currentRecordMeta.examDate || new Date().toISOString().split('T')[0],
       date: currentRecordMeta.examDate || new Date().toISOString().split('T')[0],
       totalScore: currentRecordMeta.totalScore || calculateTotalScore(currentScores),
+      classRank: currentRecordMeta.classRank,
+      gradeRank: currentRecordMeta.gradeRank,
       scores: currentScores
     }
     : null
@@ -639,53 +643,104 @@ function UserLogin({ user, onLogin, onLogout }) {
   )
 }
 
-function ScoreLineChart({ title, points, color = '#6366F1', height = 128, yLabel = '分数' }) {
+function ScoreLineChart({ title, points, color = '#6366F1', height = 128, yLabel = '分数', showRanks = false }) {
   if (!points || points.length === 0) return null
 
   const width = 320
-  const padding = { left: 38, right: 14, top: 12, bottom: 28 }
+  const rankPoints = showRanks
+    ? points.flatMap(point => [toNumber(point.classRank), toNumber(point.gradeRank)]).filter(rank => rank !== null && rank > 0)
+    : []
+  const hasRanks = rankPoints.length > 0
+  const padding = { left: 38, right: hasRanks ? 42 : 14, top: 16, bottom: 42 }
   const scores = points.map(point => toNumber(point.score)).filter(score => score !== null)
   const maxScore = Math.max(...scores, 1)
   const yMax = Math.ceil(maxScore / 10) * 10
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
+  const rankBest = hasRanks ? Math.max(1, Math.min(...rankPoints)) : 1
+  const rankWorst = hasRanks ? Math.max(...rankPoints) : 1
+  const rankRange = Math.max(rankWorst - rankBest, 1)
+  const getRankY = (rank) => {
+    const numericRank = toNumber(rank)
+    if (!numericRank || !hasRanks) return null
+    return padding.top + ((numericRank - rankBest) / rankRange) * chartHeight
+  }
   const svgPoints = points.map((point, index) => {
     const x = points.length === 1
       ? padding.left + chartWidth / 2
       : padding.left + (chartWidth * index) / (points.length - 1)
     const y = padding.top + chartHeight - ((toNumber(point.score) || 0) / yMax) * chartHeight
-    return { ...point, x, y }
+    return {
+      ...point,
+      x,
+      y,
+      classRankY: getRankY(point.classRank),
+      gradeRankY: getRankY(point.gradeRank)
+    }
   })
   const polyline = svgPoints.map(point => `${point.x},${point.y}`).join(' ')
-  const labelIndexes = points.length <= 4
-    ? points.map((_, index) => index)
-    : [0, Math.floor((points.length - 1) / 2), points.length - 1]
+  const classRankLine = svgPoints
+    .filter(point => point.classRankY !== null)
+    .map(point => `${point.x},${point.classRankY}`)
+    .join(' ')
+  const gradeRankLine = svgPoints
+    .filter(point => point.gradeRankY !== null)
+    .map(point => `${point.x},${point.gradeRankY}`)
+    .join(' ')
 
   return (
     <div className="bg-gray-50 rounded-xl p-3">
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm font-medium text-gray-700">{title}</p>
-        <p className="text-xs text-gray-400">{yLabel} / 日期</p>
+        <p className="text-xs text-gray-400">{hasRanks ? `${yLabel} / 排名 / 日期` : `${yLabel} / 日期`}</p>
       </div>
+      {hasRanks && (
+        <div className="flex items-center gap-3 mb-1 text-[10px] text-gray-500">
+          <span className="inline-flex items-center gap-1"><i className="w-3 h-0.5 bg-primary inline-block" />分数</span>
+          <span className="inline-flex items-center gap-1"><i className="w-3 h-0.5 bg-emerald-500 inline-block" />班级排名</span>
+          <span className="inline-flex items-center gap-1"><i className="w-3 h-0.5 bg-orange-500 inline-block" />年级排名</span>
+        </div>
+      )}
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full overflow-visible">
         <line x1={padding.left} y1={padding.top} x2={padding.left} y2={height - padding.bottom} stroke="#CBD5E1" strokeWidth="1" />
         <line x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} stroke="#CBD5E1" strokeWidth="1" />
+        {hasRanks && (
+          <line x1={width - padding.right} y1={padding.top} x2={width - padding.right} y2={height - padding.bottom} stroke="#CBD5E1" strokeWidth="1" />
+        )}
         <text x="4" y={padding.top + 4} className="fill-gray-400 text-[10px]">{yMax}</text>
         <text x="4" y={height - padding.bottom + 4} className="fill-gray-400 text-[10px]">0</text>
+        {hasRanks && (
+          <>
+            <text x={width - padding.right + 6} y={padding.top + 4} className="fill-gray-400 text-[10px]">{rankBest}</text>
+            <text x={width - padding.right + 6} y={height - padding.bottom + 4} className="fill-gray-400 text-[10px]">{rankWorst}</text>
+          </>
+        )}
         {svgPoints.length > 1 && (
           <polyline points={polyline} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        )}
+        {hasRanks && classRankLine && (
+          <polyline points={classRankLine} fill="none" stroke="#10B981" strokeWidth="2" strokeDasharray="4 3" strokeLinecap="round" strokeLinejoin="round" />
+        )}
+        {hasRanks && gradeRankLine && (
+          <polyline points={gradeRankLine} fill="none" stroke="#F97316" strokeWidth="2" strokeDasharray="2 3" strokeLinecap="round" strokeLinejoin="round" />
         )}
         {svgPoints.map((point, index) => (
           <g key={`${point.date}-${index}`}>
             <circle cx={point.x} cy={point.y} r="4" fill="#fff" stroke={color} strokeWidth="2" />
+            {point.classRankY !== null && (
+              <circle cx={point.x} cy={point.classRankY} r="3" fill="#fff" stroke="#10B981" strokeWidth="2" />
+            )}
+            {point.gradeRankY !== null && (
+              <rect x={point.x - 3} y={point.gradeRankY - 3} width="6" height="6" fill="#fff" stroke="#F97316" strokeWidth="2" />
+            )}
             <text x={point.x} y={point.y - 8} textAnchor="middle" className="fill-gray-700 text-[10px] font-semibold">
               {point.score}
             </text>
-            {labelIndexes.includes(index) && (
-              <text x={point.x} y={height - 8} textAnchor="middle" className="fill-gray-400 text-[10px]">
+            <g transform={`translate(${point.x}, ${height - 10}) rotate(-35)`}>
+              <text textAnchor="end" className="fill-gray-400 text-[9px]">
                 {point.label || formatDateLabel(point.date)}
               </text>
-            )}
+            </g>
           </g>
         ))}
       </svg>
@@ -721,7 +776,9 @@ function TrendAnalysis({ history, city, grade }) {
           <div key={h.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
             <span className="text-gray-500">{getExamDate(h)}</span>
             <span className="font-medium text-gray-700">{h.totalScore}分</span>
-            <span className="text-gray-400">{h.city || city} · {h.grade || grade}</span>
+            <span className="text-gray-400">
+              班{toNumber(h.classRank) || '-'} · 年{toNumber(h.gradeRank) || '-'}
+            </span>
           </div>
         ))}
       </div>
@@ -761,7 +818,7 @@ function TrendAnalysis({ history, city, grade }) {
       </div>
 
       <div className="mb-4">
-        <ScoreLineChart title="总分趋势" points={trendDataset.total.points} color="#6366F1" height={140} />
+        <ScoreLineChart title="总分趋势" points={trendDataset.total.points} color="#6366F1" height={160} showRanks />
       </div>
 
       {recordList}
@@ -1526,7 +1583,7 @@ function PremiumAnalysisCard({ analysis }) {
 }
 
 function TrendDetailNotice() {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
 
   return (
     <div className="bg-white/80 rounded-xl p-4 shadow-sm border border-amber-100">
@@ -1857,7 +1914,7 @@ function buildAnalysis(myScores, maxScores, meta, city, grade, modelTrace = {}, 
   const cityProfile = getCityProfile(city)
   const gradeProfile = getGradeProfile(grade)
   const subjectSelection = isSeniorGrade(grade) ? generateSubjectSelection(validScores) : null
-  const trendAnalysis = buildTrendAnalysis(historicalRecords, validScores, { examDate, totalScore })
+  const trendAnalysis = buildTrendAnalysis(historicalRecords, validScores, { examDate, totalScore, classRank, gradeRank })
 
   let ranking = '前50%'
   if (gradeRank && gradeRank <= 30) ranking = '年级前列'
@@ -2291,6 +2348,8 @@ export default function App() {
             city,
             grade,
             totalScore,
+            classRank: toNumber(meta.classRank),
+            gradeRank: toNumber(meta.gradeRank),
             scores: normalizedMyScores,
             maxScores: normalizedMaxScores,
             createdAt: new Date().toISOString()

@@ -3,11 +3,22 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.7.7';
+export const VERSION = '1.7.8';
 export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-13';
+export const BUILD_NUMBER = '20260511-14';
 
 export const CHANGELOG = [
+  {
+    version: '1.7.8',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      '趋势曲线横轴改为显示每一次考试日期',
+      '总分趋势叠加班级排名和年级排名，左轴显示分数，右轴显示排名',
+      '历史考试记录保存班级排名和年级排名',
+      '各科趋势深度分析说明默认展开'
+    ]
+  },
   {
     version: '1.7.7',
     date: '2026-05-11',
