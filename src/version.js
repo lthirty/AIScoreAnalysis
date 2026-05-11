@@ -3,11 +3,22 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.6.3';
+export const VERSION = '1.7.5';
 export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-04';
+export const BUILD_NUMBER = '20260511-11';
 
 export const CHANGELOG = [
+  {
+    version: '1.7.5',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      '历史趋势改为总分和每门学科的日期-分数曲线图',
+      'AI深度分析提示词新增历史趋势数据，要求逐科分析变化趋势并给出建议',
+      '补齐考试日期、模拟微信用户历史记录保存与趋势分析接线',
+      '城市、年级、考试日期选择区在手机端改为单列显示'
+    ]
+  },
   {
     version: '1.6.3',
     date: '2026-05-11',

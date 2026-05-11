@@ -93,6 +93,28 @@ const ANALYSIS_PROVIDER = {
   model: 'qwen-max-latest'
 }
 
+const STORAGE_KEYS = {
+  user: 'AIScoreAnalysis:user',
+  records: 'AIScoreAnalysis:examRecords'
+}
+
+const MOCK_WECHAT_USERS = {
+  rayna: {
+    id: 'mock-wechat-rayna',
+    openid: 'mock_openid_rayna',
+    nickname: 'Rayna',
+    loginType: 'mock-wechat',
+    avatar: ''
+  },
+  xulei: {
+    id: 'mock-wechat-xulei',
+    openid: 'mock_openid_xulei',
+    nickname: 'Xulei',
+    loginType: 'mock-wechat',
+    avatar: ''
+  }
+}
+
 function defaultImageSlot() {
   return { file: null, preview: '' }
 }
@@ -108,6 +130,184 @@ function defaultMeta() {
 
 function getEmptyScores() {
   return SUBJECTS.map(subject => ({ subject, score: '', fullScore: '' }))
+}
+
+function readJsonStorage(key, fallback) {
+  try {
+    const value = window.localStorage.getItem(key)
+    return value ? JSON.parse(value) : fallback
+  } catch (error) {
+    console.warn('Failed to read storage:', error)
+    return fallback
+  }
+}
+
+function writeJsonStorage(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch (error) {
+    console.warn('Failed to write storage:', error)
+  }
+}
+
+function getStoredUser() {
+  return readJsonStorage(STORAGE_KEYS.user, null)
+}
+
+function saveUser(user) {
+  if (user) {
+    writeJsonStorage(STORAGE_KEYS.user, user)
+  } else {
+    window.localStorage.removeItem(STORAGE_KEYS.user)
+  }
+}
+
+function getUserId(user) {
+  return user?.id || user?.openid || ''
+}
+
+function sortExamRecords(records) {
+  return [...(records || [])].sort((a, b) => {
+    const aTime = new Date(a.examDate || a.date || a.createdAt || 0).getTime()
+    const bTime = new Date(b.examDate || b.date || b.createdAt || 0).getTime()
+    return bTime - aTime
+  })
+}
+
+function getStoredRecords(userId) {
+  const allRecords = readJsonStorage(STORAGE_KEYS.records, {})
+  return sortExamRecords(allRecords[userId] || [])
+}
+
+function setStoredRecords(userId, records) {
+  const allRecords = readJsonStorage(STORAGE_KEYS.records, {})
+  allRecords[userId] = sortExamRecords(records).slice(0, 30)
+  writeJsonStorage(STORAGE_KEYS.records, allRecords)
+}
+
+function createMockWechatUser(userKey) {
+  const profile = MOCK_WECHAT_USERS[userKey] || MOCK_WECHAT_USERS.rayna
+  return {
+    ...profile,
+    loginAt: new Date().toISOString()
+  }
+}
+
+function getExamDate(record) {
+  return record?.examDate || record?.date || record?.createdAt?.slice(0, 10) || ''
+}
+
+function formatDateLabel(date) {
+  if (!date) return '未记录'
+  const parts = String(date).split('-')
+  return parts.length >= 3 ? `${Number(parts[1])}/${Number(parts[2])}` : date
+}
+
+function getRecordSubjectScore(record, subject) {
+  const score = (record?.scores || []).find(item => normalizeSubject(item.subject) === subject)
+  return toNumber(score?.score)
+}
+
+function buildTrendDataset(records) {
+  const chronologicalRecords = sortExamRecords(records || []).reverse()
+  const subjects = Array.from(new Set([
+    ...SUBJECTS,
+    ...chronologicalRecords.flatMap(record => (record.scores || []).map(item => normalizeSubject(item.subject)).filter(Boolean))
+  ])).filter(Boolean)
+
+  const total = {
+    label: '总分',
+    points: chronologicalRecords
+      .map(record => {
+        const totalScore = toNumber(record.totalScore) ?? calculateTotalScore(record.scores || [])
+        return {
+          date: getExamDate(record),
+          score: totalScore,
+          label: formatDateLabel(getExamDate(record))
+        }
+      })
+      .filter(point => point.date && point.score !== null && point.score > 0)
+  }
+
+  const subjectsSeries = subjects
+    .map(subject => ({
+      label: subject,
+      points: chronologicalRecords
+        .map(record => {
+          const score = getRecordSubjectScore(record, subject)
+          return {
+            date: getExamDate(record),
+            score,
+            label: formatDateLabel(getExamDate(record))
+          }
+        })
+        .filter(point => point.date && point.score !== null && point.score > 0)
+    }))
+    .filter(series => series.points.length > 0)
+
+  return {
+    total,
+    subjects: subjectsSeries
+  }
+}
+
+function buildTrendAnalysis(records, currentScores, currentRecordMeta = {}) {
+  const currentRecord = currentScores?.length > 0
+    ? {
+      id: 'current-analysis',
+      examDate: currentRecordMeta.examDate || new Date().toISOString().split('T')[0],
+      date: currentRecordMeta.examDate || new Date().toISOString().split('T')[0],
+      totalScore: currentRecordMeta.totalScore || calculateTotalScore(currentScores),
+      scores: currentScores
+    }
+    : null
+  const trendRecords = currentRecord ? [...(records || []), currentRecord] : (records || [])
+  const series = buildTrendDataset(trendRecords)
+
+  if (!series.total.points || series.total.points.length <= 1) {
+    return {
+      summary: '暂无历史考试记录，本次保存后将作为趋势分析基准。',
+      items: [],
+      series
+    }
+  }
+
+  const totalFirst = series.total.points[0]
+  const totalLast = series.total.points[series.total.points.length - 1]
+  const totalDiff = Math.round((totalLast.score - totalFirst.score) * 10) / 10
+  const items = series.subjects.map(subjectSeries => {
+    const points = subjectSeries.points
+    const first = points[0]
+    const last = points[points.length - 1]
+    const diff = points.length > 1 ? Math.round((last.score - first.score) * 10) / 10 : null
+    return {
+      subject: subjectSeries.label,
+      previous: points.length > 1 ? first.score : null,
+      current: last.score,
+      diff,
+      startDate: first.date,
+      endDate: last.date,
+      points,
+      status: diff === null ? '新增记录' : diff > 0 ? '进步' : diff < 0 ? '退步' : '持平'
+    }
+  })
+  const improved = items.filter(item => item.diff !== null && item.diff > 0)
+  const declined = items.filter(item => item.diff !== null && item.diff < 0)
+
+  return {
+    summary: `已对比 ${totalFirst.label} 到 ${totalLast.label}：总分${totalDiff >= 0 ? '提升' : '下降'} ${Math.abs(totalDiff)} 分，${improved.length} 科进步，${declined.length} 科退步，${items.length - improved.length - declined.length} 科持平或新增。`,
+    total: {
+      previous: totalFirst.score,
+      current: totalLast.score,
+      diff: totalDiff,
+      startDate: totalFirst.date,
+      endDate: totalLast.date,
+      status: totalDiff > 0 ? '进步' : totalDiff < 0 ? '退步' : '持平',
+      points: series.total.points
+    },
+    items,
+    series
+  }
 }
 
 function getCityProfile(city) {
@@ -273,6 +473,270 @@ function StepIndicator({ currentStep }) {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+function UserLogin({ user, onLogin, onLogout }) {
+  const [loading, setLoading] = useState(false)
+
+  const loginAsMockUser = (userKey) => {
+    onLogin(createMockWechatUser(userKey))
+  }
+
+  const handleWechatLogin = async () => {
+    setLoading(true)
+    try {
+      if (typeof wx !== 'undefined' && wx.login) {
+        wx.login({
+          success: (res) => {
+            if (res.code) {
+              onLogin({
+                id: `mock_${res.code}`,
+                openid: `mock_${res.code}`,
+                nickname: '学生用户',
+                loginType: 'wechat-miniprogram',
+                avatar: '',
+                loginTime: new Date().toISOString()
+              })
+            }
+          },
+          fail: () => loginAsMockUser('rayna')
+        })
+      } else {
+        loginAsMockUser('rayna')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (user) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+            <span className="text-primary text-sm font-medium">{user.nickname?.[0] || '用户'}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-800 truncate">{user.nickname}</p>
+            <p className="text-xs text-gray-500">模拟微信账号 · 历史成绩独立保存</p>
+          </div>
+          <button onClick={onLogout} className="text-xs text-gray-400 hover:text-gray-600">
+            退出
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          {Object.entries(MOCK_WECHAT_USERS).map(([key, profile]) => {
+            const active = getUserId(user) === profile.id
+            return (
+              <button
+                key={profile.id}
+                onClick={() => loginAsMockUser(key)}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  active ? 'bg-[#07c160] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {profile.nickname}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-3">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-800">调试微信登录</p>
+          <p className="text-xs text-gray-500 mt-1">选择 Rayna 或 Xulei，验证多账号历史成绩和趋势分析。</p>
+        </div>
+        <button
+          onClick={handleWechatLogin}
+          disabled={loading}
+          className="shrink-0 flex items-center justify-center gap-1 px-3 py-2 bg-[#07c160] text-white rounded-lg text-xs hover:bg-[#06ad56] transition-colors"
+        >
+          {loading ? <RefreshCw size={14} className="animate-spin" /> : <LogIn size={14} />}
+          <span>{loading ? '登录中' : '默认登录'}</span>
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {Object.entries(MOCK_WECHAT_USERS).map(([key, profile]) => (
+          <button
+            key={profile.id}
+            onClick={() => loginAsMockUser(key)}
+            className="rounded-lg px-3 py-2 text-sm font-medium bg-gray-100 text-gray-700 hover:bg-[#07c160] hover:text-white transition-colors"
+          >
+            {profile.nickname}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ScoreLineChart({ title, points, color = '#6366F1', height = 128, yLabel = '分数' }) {
+  if (!points || points.length === 0) return null
+
+  const width = 320
+  const padding = { left: 38, right: 14, top: 12, bottom: 28 }
+  const scores = points.map(point => toNumber(point.score)).filter(score => score !== null)
+  const maxScore = Math.max(...scores, 1)
+  const yMax = Math.ceil(maxScore / 10) * 10
+  const chartWidth = width - padding.left - padding.right
+  const chartHeight = height - padding.top - padding.bottom
+  const svgPoints = points.map((point, index) => {
+    const x = points.length === 1
+      ? padding.left + chartWidth / 2
+      : padding.left + (chartWidth * index) / (points.length - 1)
+    const y = padding.top + chartHeight - ((toNumber(point.score) || 0) / yMax) * chartHeight
+    return { ...point, x, y }
+  })
+  const polyline = svgPoints.map(point => `${point.x},${point.y}`).join(' ')
+  const labelIndexes = points.length <= 4
+    ? points.map((_, index) => index)
+    : [0, Math.floor((points.length - 1) / 2), points.length - 1]
+
+  return (
+    <div className="bg-gray-50 rounded-xl p-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-medium text-gray-700">{title}</p>
+        <p className="text-xs text-gray-400">{yLabel} / 日期</p>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full overflow-visible">
+        <line x1={padding.left} y1={padding.top} x2={padding.left} y2={height - padding.bottom} stroke="#CBD5E1" strokeWidth="1" />
+        <line x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} stroke="#CBD5E1" strokeWidth="1" />
+        <text x="4" y={padding.top + 4} className="fill-gray-400 text-[10px]">{yMax}</text>
+        <text x="4" y={height - padding.bottom + 4} className="fill-gray-400 text-[10px]">0</text>
+        {svgPoints.length > 1 && (
+          <polyline points={polyline} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        )}
+        {svgPoints.map((point, index) => (
+          <g key={`${point.date}-${index}`}>
+            <circle cx={point.x} cy={point.y} r="4" fill="#fff" stroke={color} strokeWidth="2" />
+            <text x={point.x} y={point.y - 8} textAnchor="middle" className="fill-gray-700 text-[10px] font-semibold">
+              {point.score}
+            </text>
+            {labelIndexes.includes(index) && (
+              <text x={point.x} y={height - 8} textAnchor="middle" className="fill-gray-400 text-[10px]">
+                {point.label || formatDateLabel(point.date)}
+              </text>
+            )}
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function TrendAnalysis({ history, city, grade }) {
+  const [showSubjects, setShowSubjects] = useState(true)
+
+  if (history.length === 0) {
+    return (
+      <div className="bg-gray-50 rounded-xl p-4 text-center">
+        <p className="text-sm text-gray-500">暂无历史成绩记录</p>
+        <p className="text-xs text-gray-400 mt-1">完成至少一次分析后自动保存</p>
+      </div>
+    )
+  }
+
+  const recentHistory = sortExamRecords(history).slice(0, 10)
+  const trendDataset = buildTrendDataset(recentHistory)
+  const avgScore = recentHistory.reduce((sum, h) => sum + (toNumber(h.totalScore) || 0), 0) / recentHistory.length
+  const latestScore = toNumber(recentHistory[0]?.totalScore) || 0
+  const firstScore = toNumber(recentHistory[recentHistory.length - 1]?.totalScore) || 0
+  const scoreChange = latestScore - firstScore
+  const scoreChangePercent = firstScore > 0 ? ((scoreChange / firstScore) * 100).toFixed(1) : 0
+  const subjectColors = ['#6366F1', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6', '#F97316', '#64748B']
+
+  return (
+    <div className="bg-white rounded-xl shadow-md p-4 border border-indigo-100">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={18} className="text-primary" />
+          <h3 className="font-semibold text-gray-800">历史趋势</h3>
+        </div>
+        <button
+          onClick={() => setShowSubjects(!showSubjects)}
+          className="text-xs text-primary hover:text-indigo-600"
+        >
+          {showSubjects ? '收起科目' : '查看每科'}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="bg-indigo-50 rounded-xl p-3 text-center">
+          <p className="text-xl font-bold text-primary">{recentHistory.length}</p>
+          <p className="text-xs text-gray-500">考试次数</p>
+        </div>
+        <div className="bg-green-50 rounded-xl p-3 text-center">
+          <p className={`text-xl font-bold ${scoreChange >= 0 ? 'text-success' : 'text-red-500'}`}>
+            {scoreChange >= 0 ? '+' : ''}{scoreChangePercent}%
+          </p>
+          <p className="text-xs text-gray-500">分数变化</p>
+        </div>
+        <div className="bg-amber-50 rounded-xl p-3 text-center">
+          <p className="text-xl font-bold text-amber-600">{avgScore.toFixed(0)}</p>
+          <p className="text-xs text-gray-500">平均分</p>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <ScoreLineChart title="总分趋势" points={trendDataset.total.points} color="#6366F1" height={140} />
+      </div>
+
+      {showSubjects && (
+        <div className="space-y-4 pt-4 border-t border-gray-100">
+          <div>
+            <p className="text-sm font-medium text-gray-700">各科成绩曲线</p>
+            <p className="text-xs text-gray-400 mt-1">竖坐标为分数，横坐标为考试日期。</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {trendDataset.subjects.map((series, index) => {
+              const first = series.points[0]
+              const last = series.points[series.points.length - 1]
+              const diff = series.points.length > 1 ? Math.round((last.score - first.score) * 10) / 10 : 0
+              return (
+                <div key={series.label} className="space-y-2">
+                  <ScoreLineChart
+                    title={`${series.label}趋势`}
+                    points={series.points}
+                    color={subjectColors[index % subjectColors.length]}
+                    height={116}
+                  />
+                  <p className={`text-xs ${diff >= 0 ? 'text-success' : 'text-red-500'}`}>
+                    {series.points.length > 1
+                      ? `${formatDateLabel(first.date)} 到 ${formatDateLabel(last.date)}：${diff >= 0 ? '+' : ''}${diff} 分`
+                      : '只有一次记录，暂不能判断变化。'}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-sm font-medium text-gray-700 mb-2">考试记录</p>
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              {recentHistory.map((h) => (
+                <div key={h.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="text-gray-500">{getExamDate(h)}</span>
+                  <span className="font-medium text-gray-700">{h.totalScore}分</span>
+                  <span className="text-gray-400">{h.city || city} · {h.grade || grade}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!showSubjects && (
+        <div className="text-xs text-gray-400">
+          点击“查看每科”可展开语文、数学、英语等每门学科的日期曲线。
+        </div>
+      )}
     </div>
   )
 }
@@ -527,6 +991,23 @@ function GradeSelector({ value, onChange }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function DateSelector({ value, onChange }) {
+  const today = new Date().toISOString().split('T')[0]
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">考试日期</label>
+      <input
+        type="date"
+        value={value || today}
+        onChange={(e) => onChange(e.target.value)}
+        max={today}
+        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-800 hover:border-primary transition-colors focus:outline-none focus:border-primary"
+      />
     </div>
   )
 }
@@ -1091,12 +1572,32 @@ function buildOcrPrompt(type) {
   ].join('')
 }
 
-function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSelection = null) {
+function formatTrendForPrompt(trendAnalysis) {
+  if (!trendAnalysis?.series?.total?.points || trendAnalysis.series.total.points.length <= 1) {
+    return '历史趋势数据不足：当前少于2次考试记录。'
+  }
+
+  const totalLine = trendAnalysis.total
+    ? `总分：${trendAnalysis.total.points.map(point => `${point.date}:${point.score}`).join(' -> ')}，变化${trendAnalysis.total.diff >= 0 ? '+' : ''}${trendAnalysis.total.diff}分。`
+    : `总分：${trendAnalysis.series.total.points.map(point => `${point.date}:${point.score}`).join(' -> ')}。`
+  const subjectLines = trendAnalysis.items
+    .map(item => {
+      const points = item.points?.map(point => `${point.date}:${point.score}`).join(' -> ') || `${item.current}`
+      const diffText = item.diff === null ? '暂无可比变化' : `变化${item.diff >= 0 ? '+' : ''}${item.diff}分`
+      return `${item.subject}：${points}，${diffText}，状态${item.status}`
+    })
+    .join('\n')
+
+  return [totalLine, subjectLines].filter(Boolean).join('\n')
+}
+
+function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSelection = null, trendAnalysis = null) {
   const scoreText = scores.map(s => `${s.subject}:${s.score}`).join(', ')
   const maxText = maxScores.length > 0 ? maxScores.map(s => `${s.subject}:${s.maxScore || s.score}`).join(', ') : '未提供'
   const subjectSelText = subjectSelection ? `本地初步建议：${subjectSelection.combo}。理由：${subjectSelection.reason}` : '无'
   const fullScoreData = getFullScoreData(city, grade)
   const fullScoreText = Object.entries(fullScoreData).map(([k, v]) => `${k}:${v}分`).join(', ')
+  const trendText = formatTrendForPrompt(trendAnalysis)
 
   return [
     '你是资深的高考成绩分析专家，擅长学情诊断、选科决策和个性化学习规划。',
@@ -1112,6 +1613,10 @@ function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSe
     `各科成绩：${scoreText}`,
     `班级最高分参考：${maxText}`,
     `总分：${meta.totalScore || '未提供'}`,
+    '',
+    '【历史趋势数据】',
+    '以下数据用于分析成绩曲线，竖坐标是分数，横坐标是考试日期：',
+    trendText,
     '',
     '【本地初步分析参考】',
     subjectSelText,
@@ -1131,18 +1636,21 @@ function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSe
     '[一句话总结整体表现，定位所在分数段水平]',
     '',
     '2、各科分差分析',
-    '[逐科分析分差原因，识别失分集中在哪些题型/知识点]',
+    '[逐科分析与班级最高分/满分的差距，识别失分集中在哪些题型/知识点]',
     '',
-    '3、选科建议（高中生必填）',
+    '3、各科趋势分析与建议',
+    '[必须逐科分析历史曲线：上升、下降或波动，并给出每科对应建议。不要只分析总分]',
+    '',
+    '4、选科建议（高中生必填）',
     '[推荐组合及理由，或说明维持现状的原因]',
     '',
-    '4、提分优先级',
+    '5、提分优先级',
     '[按紧急程度排序：最该先补哪科，为什么]',
     '',
-    '5、具体可执行建议',
+    '6、具体可执行建议',
     '[3-5条立即可行动的具体措施]',
     '',
-    '6、阶段目标',
+    '7、阶段目标',
     '[下次考试的合理目标及达成路径]'
   ].join('\n')
 }
@@ -1216,7 +1724,7 @@ function normalizeOcrPayload(payload, type) {
   }
 }
 
-function buildAnalysis(myScores, maxScores, meta, city, grade, modelTrace = {}) {
+function buildAnalysis(myScores, maxScores, meta, city, grade, modelTrace = {}, historicalRecords = [], examDate = '') {
   const validScores = myScores
     .map(item => ({
       subject: normalizeSubject(item.subject),
@@ -1236,6 +1744,7 @@ function buildAnalysis(myScores, maxScores, meta, city, grade, modelTrace = {}) 
   const cityProfile = getCityProfile(city)
   const gradeProfile = getGradeProfile(grade)
   const subjectSelection = isSeniorGrade(grade) ? generateSubjectSelection(validScores) : null
+  const trendAnalysis = buildTrendAnalysis(historicalRecords, validScores, { examDate, totalScore })
 
   let ranking = '前50%'
   if (gradeRank && gradeRank <= 30) ranking = '年级前列'
@@ -1328,6 +1837,7 @@ function buildAnalysis(myScores, maxScores, meta, city, grade, modelTrace = {}) 
     classRank,
     gradeRank,
     subjectSelection,
+    trendAnalysis,
     modelTrace,
     calculation: {
       totalScoreFormula: `${validScores.map(item => `${item.subject}${item.score}`).join(' + ')} = ${totalScore}`,
@@ -1375,6 +1885,7 @@ export default function App() {
   const [meta, setMeta] = useState(defaultMeta)
   const [city, setCity] = useState('杭州')
   const [grade, setGrade] = useState('高一')
+  const [examDate, setExamDate] = useState(new Date().toISOString().split('T')[0])
   const [error, setError] = useState(null)
   const [warnings, setWarnings] = useState([])
   const [aiProvider, setAiProvider] = useState('aliyun')
@@ -1385,6 +1896,23 @@ export default function App() {
     deepseek: ''
   })
   const [analysis, setAnalysis] = useState(null)
+  const [user, setUser] = useState(() => getStoredUser())
+  const [history, setHistory] = useState(() => {
+    const storedUser = getStoredUser()
+    return storedUser ? getStoredRecords(getUserId(storedUser)) : []
+  })
+
+  const handleLogin = (userData) => {
+    setUser(userData)
+    saveUser(userData)
+    setHistory(getStoredRecords(getUserId(userData)))
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+    setHistory([])
+    saveUser(null)
+  }
 
   const handleImageSelect = (type, file) => {
     const preview = URL.createObjectURL(file)
@@ -1483,7 +2011,15 @@ export default function App() {
         temperature: 0.2,
         messages: [{
           role: 'user',
-          content: buildDeepAnalysisPrompt(normalizedMyScores, normalizedMaxScores, meta, city, grade, baseAnalysis?.subjectSelection)
+          content: buildDeepAnalysisPrompt(
+            normalizedMyScores,
+            normalizedMaxScores,
+            meta,
+            city,
+            grade,
+            baseAnalysis?.subjectSelection,
+            baseAnalysis?.trendAnalysis
+          )
         }]
       })
     })
@@ -1604,7 +2140,7 @@ export default function App() {
       visionModel: inputMode === 'upload' ? `${AI_PROVIDERS[aiProvider].name} ${AI_PROVIDERS[aiProvider].model}` : '手动输入，未使用图片识别模型',
       analysisModel: `${ANALYSIS_PROVIDER.name} ${ANALYSIS_PROVIDER.model}`
     }
-    const nextAnalysis = buildAnalysis(normalizedMyScores, normalizedMaxScores, meta, city, grade, modelTrace)
+    const nextAnalysis = buildAnalysis(normalizedMyScores, normalizedMaxScores, meta, city, grade, modelTrace, history, examDate)
     if (!nextAnalysis) {
       setError('分析所需数据不足，请检查识别结果')
       return
@@ -1628,6 +2164,29 @@ export default function App() {
       setAnalysis(nextAnalysis)
     } finally {
       setAnalyzing(false)
+      if (user) {
+        const userId = getUserId(user)
+        const totalScore = nextAnalysis?.totalScore || normalizedMyScores.reduce((sum, item) => sum + item.score, 0)
+        const nextHistory = sortExamRecords([
+          {
+            id: `${userId}-${Date.now()}`,
+            userId,
+            openid: user.openid,
+            nickname: user.nickname,
+            date: examDate,
+            examDate,
+            city,
+            grade,
+            totalScore,
+            scores: normalizedMyScores,
+            maxScores: normalizedMaxScores,
+            createdAt: new Date().toISOString()
+          },
+          ...getStoredRecords(userId)
+        ]).slice(0, 30)
+        setStoredRecords(userId, nextHistory)
+        setHistory(nextHistory)
+      }
       setStep(2)
     }
   }
@@ -1683,6 +2242,10 @@ export default function App() {
       <div className="max-w-5xl mx-auto h-full flex flex-col">
         <AIAnalysisBanner />
 
+        <div className="mb-3">
+          <UserLogin user={user} onLogin={handleLogin} onLogout={handleLogout} />
+        </div>
+
         <StepIndicator currentStep={step} />
 
         {step === 0 && (
@@ -1695,9 +2258,10 @@ export default function App() {
                 onCustomKeyChange={handleCustomKeyChange}
               />
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <CitySelector value={city} onChange={setCity} />
                 <GradeSelector value={grade} onChange={setGrade} />
+                <DateSelector value={examDate} onChange={setExamDate} />
               </div>
 
               <ModeChoice mode={inputMode} onChange={handleInputModeChange} />
@@ -1896,6 +2460,7 @@ export default function App() {
             )}
 
             <FreeAnalysisCard analysis={analysis} />
+            {user && <TrendAnalysis history={history} city={city} grade={grade} />}
             <SubjectSelectionCard selection={analysis.subjectSelection} />
             <AnalysisEvidenceCard analysis={analysis} />
 
