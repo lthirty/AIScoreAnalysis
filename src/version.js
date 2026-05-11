@@ -3,11 +3,24 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.7.8';
+export const VERSION = '1.7.9';
 export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-14';
+export const BUILD_NUMBER = '20260511-15';
 
 export const CHANGELOG = [
+  {
+    version: '1.7.9',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      '流程第3步改为AI基础分析，并新增第4步增强分析',
+      'AI基础分析页新增AI增强分析付费转化入口和教育部门网址附录',
+      'AI深度分析仅在增强分析步骤展示，调试阶段点击即可进入',
+      '增强分析页底部提供各科试卷照片导入和分题型手动输入入口',
+      '成绩编辑支持修改、单行删除和全部删除二次确认',
+      '个人成绩高于班级最高分时在确认页和基础分析页标红加粗提示'
+    ]
+  },
   {
     version: '1.7.8',
     date: '2026-05-11',

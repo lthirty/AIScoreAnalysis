@@ -115,6 +115,39 @@ const MOCK_WECHAT_USERS = {
   }
 }
 
+const EDUCATION_DEPT_LINKS = {
+  北京: 'https://jw.beijing.gov.cn/',
+  上海: 'https://edu.sh.gov.cn/',
+  广州: 'https://jyj.gz.gov.cn/',
+  深圳: 'https://szeb.sz.gov.cn/',
+  杭州: 'https://edu.hangzhou.gov.cn/',
+  南京: 'https://edu.nanjing.gov.cn/',
+  武汉: 'https://jyj.wuhan.gov.cn/',
+  成都: 'https://edu.chengdu.gov.cn/',
+  重庆: 'https://jw.cq.gov.cn/',
+  西安: 'http://edu.xa.gov.cn/',
+  苏州: 'https://jyj.suzhou.gov.cn/',
+  天津: 'https://jy.tj.gov.cn/',
+  青岛: 'http://edu.qingdao.gov.cn/',
+  长沙: 'http://jyj.changsha.gov.cn/',
+  郑州: 'https://zzjy.zhengzhou.gov.cn/',
+  大连: 'https://edu.dl.gov.cn/',
+  沈阳: 'http://jyj.shenyang.gov.cn/',
+  济南: 'http://jnedu.jinan.gov.cn/',
+  福州: 'https://jyj.fuzhou.gov.cn/',
+  厦门: 'https://edu.xm.gov.cn/',
+  合肥: 'https://jyj.hefei.gov.cn/',
+  昆明: 'https://jtj.km.gov.cn/',
+  哈尔滨: 'https://www.harbin.gov.cn/haerbin/c104550/ty_list.shtml',
+  长春: 'http://jyj.changchun.gov.cn/',
+  贵阳: 'https://jyj.guiyang.gov.cn/',
+  太原: 'https://jyj.taiyuan.gov.cn/',
+  石家庄: 'http://sjzjyj.sjz.gov.cn/',
+  兰州: 'https://jyj.lanzhou.gov.cn/',
+  乌鲁木齐: 'http://www.urumqi.gov.cn/fjbm/jyj.htm',
+  呼和浩特: 'http://jyj.huhhot.gov.cn/'
+}
+
 function defaultImageSlot() {
   return { file: null, preview: '' }
 }
@@ -515,10 +548,10 @@ function generateSubjectSelection(scores) {
 }
 
 function StepIndicator({ currentStep }) {
-  const steps = ['录入方式', '确认成绩', '分析结果']
+  const steps = ['录入方式', '确认成绩', 'AI基础分析', '增强分析']
 
   return (
-    <div className="flex items-center justify-center mb-3">
+    <div className="flex items-center justify-center mb-3 overflow-x-auto pb-1">
       {steps.map((step, index) => (
         <div key={step} className="flex items-center">
           <div className="flex flex-col items-center">
@@ -535,7 +568,7 @@ function StepIndicator({ currentStep }) {
             </span>
           </div>
           {index < steps.length - 1 && (
-            <div className={`w-12 h-1 mx-2 rounded ${index < currentStep ? 'bg-success' : 'bg-gray-200'}`} />
+            <div className={`w-8 sm:w-12 h-1 mx-2 rounded ${index < currentStep ? 'bg-success' : 'bg-gray-200'}`} />
           )}
         </div>
       ))}
@@ -1249,6 +1282,11 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
 
   const handleChange = (index, field, value) => {
     const nextRows = [...rows]
+    const previous = nextRows[index]?.[field] ?? ''
+    if (previous !== '' && previous !== value) {
+      const confirmed = window.confirm(`确认把${nextRows[index]?.subject || '该科'}的${field === 'subject' ? '科目' : field === 'score' ? '我的成绩' : '班级最高分'}从“${previous}”修改为“${value}”吗？`)
+      if (!confirmed) return
+    }
     nextRows[index] = { ...nextRows[index], [field]: value }
     updateRows(nextRows)
   }
@@ -1258,7 +1296,23 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
   }
 
   const handleDelete = (index) => {
+    const item = rows[index]
+    const confirmed = window.confirm(`确认删除${item?.subject || '该行'}成绩吗？删除后需要重新填写。`)
+    if (!confirmed) return
     updateRows(rows.filter((_, itemIndex) => itemIndex !== index))
+  }
+
+  const handleClearAll = () => {
+    const confirmed = window.confirm('确认删除当前表格里所有已填写成绩吗？此操作不会自动恢复。')
+    if (!confirmed) return
+    onScoresChange([])
+    onMaxScoresChange([])
+  }
+
+  const isAbnormalRow = (item) => {
+    const score = toNumber(item.score)
+    const maxScore = toNumber(item.maxScore)
+    return score !== null && maxScore !== null && maxScore > 0 && score > maxScore
   }
 
   return (
@@ -1280,6 +1334,12 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
         <p className="text-xs text-gray-500 mb-2">{summary}</p>
       )}
 
+      {rows.some(isAbnormalRow) && (
+        <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600">
+          发现异常：个人成绩高于班级最高分，请重点核对标红科目。
+        </div>
+      )}
+
       <div className="grid grid-cols-[64px_1fr_1fr_30px] gap-2 text-xs text-gray-400 px-2 mb-2">
         <span>科目</span>
         <span className="text-center">我的成绩</span>
@@ -1289,7 +1349,12 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {rows.map((item, index) => (
-          <div key={`${item.subject || 'new'}-${index}`} className="grid grid-cols-[64px_1fr_1fr_30px] gap-2 items-center bg-white rounded-lg p-2">
+          <div
+            key={`${item.subject || 'new'}-${index}`}
+            className={`grid grid-cols-[64px_1fr_1fr_30px] gap-2 items-center rounded-lg p-2 ${
+              isAbnormalRow(item) ? 'bg-red-50 border border-red-300' : 'bg-white'
+            }`}
+          >
             <input
               type="text"
               value={item.subject}
@@ -1302,7 +1367,9 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
               value={item.score}
               onChange={(e) => handleChange(index, 'score', e.target.value)}
               placeholder="成绩"
-              className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg text-center"
+              className={`px-2 py-1.5 text-sm border rounded-lg text-center ${
+                isAbnormalRow(item) ? 'border-red-400 text-red-600 font-bold' : 'border-gray-200'
+              }`}
             />
             <input
               type="number"
@@ -1320,6 +1387,15 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
           </div>
         ))}
       </div>
+
+      {rows.some(item => item.score !== '' || item.maxScore !== '') && (
+        <button
+          onClick={handleClearAll}
+          className="mt-3 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-50"
+        >
+          删除全部已填成绩
+        </button>
+      )}
     </div>
   )
 }
@@ -1388,6 +1464,7 @@ function FreeAnalysisCard({ analysis }) {
     }
   })
   const comparisonData = Object.values(scoreMap).sort((a, b) => b.diff - a.diff)
+  const hasAbnormalScore = comparisonData.some(item => item.maxScore && item.score > item.maxScore)
 
   return (
     <div className="bg-white rounded-xl shadow-md p-4 border border-indigo-100">
@@ -1422,6 +1499,11 @@ function FreeAnalysisCard({ analysis }) {
           <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
             <TrendingUp size={16} className="text-accent" /> 各科成绩对比
           </p>
+          {hasAbnormalScore && (
+            <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600">
+              发现异常：个人成绩高于班级最高分，请回到成绩确认页核对标红科目。
+            </div>
+          )}
           <div className="bg-gray-50 rounded-xl p-3">
             <table className="w-full text-xs">
               <thead>
@@ -1435,8 +1517,8 @@ function FreeAnalysisCard({ analysis }) {
               </thead>
               <tbody>
                 {comparisonData.map((item, idx) => (
-                  <tr key={`${item.subject}-${idx}`} className="border-b border-gray-100 last:border-0">
-                    <td className="py-1.5 px-1 font-medium text-gray-700">{item.subject}</td>
+                  <tr key={`${item.subject}-${idx}`} className={`border-b last:border-0 ${item.maxScore && item.score > item.maxScore ? 'border-red-100 bg-red-50 font-bold text-red-600' : 'border-gray-100'}`}>
+                    <td className={`py-1.5 px-1 font-medium ${item.maxScore && item.score > item.maxScore ? 'text-red-600' : 'text-gray-700'}`}>{item.subject}</td>
                     <td className="text-center py-1.5 px-1">{item.score}</td>
                     <td className="text-center py-1.5 px-1 text-accent">{item.maxScore || '-'}</td>
                     <td className={`text-center py-1.5 px-1 font-medium ${item.diff > 0 ? 'text-warning' : 'text-success'}`}>
@@ -1520,8 +1602,6 @@ function PremiumAnalysisCard({ analysis }) {
       </div>
 
       <div className="space-y-4">
-        <TrendDetailNotice />
-
         {cleanAiReport ? (
           <div className="bg-white rounded-xl p-4 shadow-sm">
             <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
@@ -1577,6 +1657,8 @@ function PremiumAnalysisCard({ analysis }) {
             </div>
           </>
         )}
+
+        <TrendDetailNotice />
       </div>
     </div>
   )
@@ -1584,6 +1666,19 @@ function PremiumAnalysisCard({ analysis }) {
 
 function TrendDetailNotice() {
   const [expanded, setExpanded] = useState(true)
+  const [mode, setMode] = useState('upload')
+  const [paperImage, setPaperImage] = useState(defaultImageSlot)
+  const [paperDetail, setPaperDetail] = useState('')
+
+  const handlePaperSelect = (file) => {
+    if (paperImage.preview) URL.revokeObjectURL(paperImage.preview)
+    setPaperImage({ file, preview: URL.createObjectURL(file) })
+  }
+
+  const handlePaperRemove = () => {
+    if (paperImage.preview) URL.revokeObjectURL(paperImage.preview)
+    setPaperImage(defaultImageSlot())
+  }
 
   return (
     <div className="bg-white/80 rounded-xl p-4 shadow-sm border border-amber-100">
@@ -1598,8 +1693,32 @@ function TrendDetailNotice() {
         <ChevronRight className={`text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} size={18} />
       </button>
       {expanded && (
-        <div className="mt-3 text-sm text-gray-600 leading-6">
-          如果需要分析每门学科的真实变化原因，请拍摄或手动输入各科试卷里每个部分的分数和丢分情况，例如英语的选择题、填空题、判断题、作文题等。只有总分和学科总分时，系统只能判断分数曲线变化，不能准确定位题型短板。
+        <div className="mt-3 space-y-3 text-sm text-gray-600 leading-6">
+          <p>
+            如果需要分析每门学科的真实变化原因，请导入各科试卷照片，或手动输入各科试卷里每个部分的分数和丢分情况，例如英语的选择题、填空题、判断题、作文题等。只有总分和学科总分时，系统只能判断分数曲线变化，不能准确定位题型短板。
+          </p>
+          <ModeChoice mode={mode} onChange={setMode} />
+          {mode === 'upload' ? (
+            <ImageUploadSlot
+              title="各科试卷照片"
+              description="可导入试卷、答题卡或分题型得分截图，后续增强分析会按题型定位短板。"
+              slot={paperImage}
+              onSelect={handlePaperSelect}
+              onRemove={handlePaperRemove}
+              disabled={false}
+            />
+          ) : (
+            <div className="bg-gray-50 rounded-xl p-3">
+              <label className="block text-sm font-medium text-gray-700 mb-2">手动输入题型得分和丢分情况</label>
+              <textarea
+                value={paperDetail}
+                onChange={(event) => setPaperDetail(event.target.value)}
+                placeholder="示例：英语：选择题 30/40，填空题 12/15，作文 18/25；数学：选择题错2题，函数大题丢8分..."
+                className="w-full min-h-28 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+              <p className="mt-2 text-xs text-gray-400">当前为调试入口，信息暂不提交；后续会接入增强分析模型。</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1679,6 +1798,88 @@ function AnalysisEvidenceCard({ analysis }) {
           <p>{calculation.gradeBasis}</p>
         </div>
       </div>}
+    </div>
+  )
+}
+
+function EducationDeptAppendix({ currentCity }) {
+  const [selectedCity, setSelectedCity] = useState(currentCity || '杭州')
+  const [customCity, setCustomCity] = useState('')
+  const effectiveCity = customCity.trim() || selectedCity
+  const url = EDUCATION_DEPT_LINKS[effectiveCity]
+  const searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`${effectiveCity} 教育局 官方网站`)}`
+
+  return (
+    <div className="bg-white rounded-xl shadow-md p-4 border border-slate-100">
+      <details>
+        <summary className="cursor-pointer text-sm font-semibold text-gray-800">
+          附录：当地教育部门网址查询
+        </summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-xs text-gray-500 leading-5">
+            可查看当地教育部门公开信息，了解考试政策、招生安排、学业要求等。不同城市政策会变化，最终以官方发布为准。
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <select
+              value={selectedCity}
+              onChange={(event) => {
+                setSelectedCity(event.target.value)
+                setCustomCity('')
+              }}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white"
+            >
+              {Object.keys(EDUCATION_DEPT_LINKS).map(cityName => (
+                <option key={cityName} value={cityName}>{cityName}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={customCity}
+              onChange={(event) => setCustomCity(event.target.value)}
+              placeholder="或直接填写城市"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+            />
+          </div>
+          <a
+            href={url || searchUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="block w-full rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-medium text-white"
+          >
+            {url ? `打开${effectiveCity}教育部门官网` : `搜索${effectiveCity}教育部门官网`}
+          </a>
+        </div>
+      </details>
+    </div>
+  )
+}
+
+function EnhancedAnalysisCta({ analysis, onStart }) {
+  const weakSubject = analysis?.weaknesses?.[0]?.subject
+  const strongSubject = analysis?.strengths?.[0]?.subject
+
+  return (
+    <div className="bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 rounded-2xl p-4 text-white shadow-xl shadow-indigo-200">
+      <div className="flex items-start gap-3">
+        <div className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+          <Crown size={22} className="text-amber-300" />
+        </div>
+        <div className="flex-1">
+          <p className="text-lg font-bold">解锁 AI 增强分析</p>
+          <p className="mt-2 text-sm leading-6 text-indigo-100">
+            基础分析已经给出总分、排名、分差和趋势。增强分析会进一步整合城市与年级特点、优势科目{strongSubject ? `（${strongSubject}）` : ''}、待提升科目{weakSubject ? `（${weakSubject}）` : ''}和阶段目标，生成更适合家长决策和学生执行的深度报告。
+          </p>
+          <p className="mt-2 text-xs text-amber-200">
+            调试阶段无需付费，点击即可进入。正式版可作为付费增强服务。
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={onStart}
+        className="mt-4 w-full rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 px-4 py-3 text-base font-bold text-slate-950 shadow-lg shadow-orange-900/20"
+      >
+        AI增强分析
+      </button>
     </div>
   )
 }
@@ -2614,7 +2815,7 @@ export default function App() {
           <div className="animate-slideUp grid lg:grid-cols-[0.95fr_1.05fr] gap-3 min-h-0">
             <div className="space-y-3">
               <div className="text-center bg-white rounded-xl shadow-md p-3 border border-gray-100">
-                <p className="text-sm text-gray-500 mb-1">分析完成</p>
+                <p className="text-sm text-gray-500 mb-1">AI基础分析完成</p>
                 <p className="text-xs text-gray-400">
                   {city} · {grade} · {AI_PROVIDERS[aiProvider].name}
                 </p>
@@ -2635,13 +2836,37 @@ export default function App() {
             {user && <TrendAnalysis history={history} city={city} grade={grade} />}
             <SubjectSelectionCard selection={analysis.subjectSelection} />
             <AnalysisEvidenceCard analysis={analysis} />
+            </div>
 
-            <button
-              onClick={handleReset}
-              className="w-full btn-secondary"
-            >
-              分析新成绩
-            </button>
+            <div className="space-y-3 lg:max-h-[calc(100svh-150px)] lg:overflow-y-auto lg:pr-1">
+              <EnhancedAnalysisCta analysis={analysis} onStart={() => setStep(3)} />
+              <EducationDeptAppendix currentCity={city} />
+              <button
+                onClick={handleReset}
+                className="w-full btn-secondary"
+              >
+                重新录入成绩
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && analysis && (
+          <div className="animate-slideUp grid lg:grid-cols-[0.85fr_1.15fr] gap-3 min-h-0">
+            <div className="space-y-3">
+              <div className="text-center bg-white rounded-xl shadow-md p-3 border border-amber-100">
+                <p className="text-sm font-semibold text-amber-600 mb-1">AI增强分析</p>
+                <p className="text-xs text-gray-400">
+                  调试阶段已跳过付费验证 · 正式版此处接入支付
+                </p>
+              </div>
+              <FreeAnalysisCard analysis={analysis} />
+              <button
+                onClick={() => setStep(2)}
+                className="w-full btn-secondary"
+              >
+                返回AI基础分析
+              </button>
             </div>
 
             <div className="lg:max-h-[calc(100svh-150px)] lg:overflow-y-auto lg:pr-1">
