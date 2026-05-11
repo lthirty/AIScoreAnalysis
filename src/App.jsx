@@ -15,7 +15,8 @@ import {
   Target,
   Zap,
   Crown,
-  RefreshCw
+  RefreshCw,
+  PencilLine
 } from 'lucide-react'
 import { VERSION, BUILD_DATE } from './version.js'
 
@@ -85,6 +86,13 @@ const AI_PROVIDERS = {
   }
 }
 
+const ANALYSIS_PROVIDER = {
+  name: '阿里百炼',
+  apiKey: AI_PROVIDERS.aliyun.apiKey,
+  endpoint: AI_PROVIDERS.aliyun.endpoint,
+  model: 'qwen-max-latest'
+}
+
 function defaultImageSlot() {
   return { file: null, preview: '' }
 }
@@ -96,6 +104,10 @@ function defaultMeta() {
     gradeRank: '',
     maxTotalScore: ''
   }
+}
+
+function getEmptyScores() {
+  return SUBJECTS.map(subject => ({ subject, score: '', fullScore: '' }))
 }
 
 function getCityProfile(city) {
@@ -140,28 +152,124 @@ function getGradeProfile(grade) {
   return profiles[grade] || { stage: '当前阶段', advice: '重点看总分结构、排名位置和短板科目。' }
 }
 
+function isSeniorGrade(grade) {
+  return ['高一', '高二', '高三'].includes(grade)
+}
+
+// 各省市高考满分数据（默认参照，部分城市有差异）
+const FULL_SCORES = {
+  全国卷: {
+    语文: 150, 数学: 150, 英语: 150,
+    物理: 100, 化学: 100, 生物: 100,
+    历史: 100, 地理: 100, 政治: 100
+  },
+  北京: {
+    语文: 150, 数学: 150, 英语: 150,
+    物理: 100, 化学: 100, 生物: 100,
+    历史: 100, 地理: 100, 政治: 100
+  },
+  上海: {
+    语文: 150, 数学: 150, 英语: 150,
+    物理: 100, 化学: 100, 生物: 100,
+    历史: 100, 地理: 100, 政治: 100
+  },
+  浙江: {
+    语文: 150, 数学: 150, 英语: 150,
+    物理: 100, 化学: 100, 生物: 100,
+    历史: 100, 地理: 100, 政治: 100
+  }
+}
+
+// 初中各科满分（默认120分，部分地区150分）
+const JUNIOR_FULL_SCORES = {
+  语文: 120, 数学: 120, 英语: 120,
+  物理: 100, 化学: 100,
+  历史: 100, 地理: 100, 政治: 100
+}
+
+// 小学各科满分（默认100分）
+const PRIMARY_FULL_SCORES = {
+  语文: 100, 数学: 100, 英语: 100
+}
+
+function getFullScoreData(city, grade) {
+  if (grade.includes('高一') || grade.includes('高二') || grade.includes('高三')) {
+    // 高中：优先用城市特定数据，否则用全国卷
+    return FULL_SCORES[city] || FULL_SCORES['全国卷']
+  } else if (grade.includes('初一') || grade.includes('初二') || grade.includes('初三')) {
+    // 初中
+    return JUNIOR_FULL_SCORES
+  } else {
+    // 小学
+    return PRIMARY_FULL_SCORES
+  }
+}
+
+function generateSubjectSelection(scores) {
+  const scoreMap = scores.reduce((acc, item) => {
+    acc[item.subject] = toNumber(item.score) || 0
+    return acc
+  }, {})
+  const physics = scoreMap.物理 || 0
+  const chemistry = scoreMap.化学 || 0
+  const biology = scoreMap.生物 || 0
+  const geography = scoreMap.地理 || 0
+  const politics = scoreMap.政治 || 0
+  const history = scoreMap.历史 || 0
+
+  const scienceBase = physics + chemistry
+  const thirdSubject = [
+    { subject: '生物', score: biology, combo: '物化生', fit: '理工、医学、生命科学方向覆盖更完整' },
+    { subject: '地理', score: geography, combo: '物化地', fit: '理工、地理信息、资源环境方向更均衡' },
+    { subject: '政治', score: politics, combo: '物化政', fit: '理工基础保留，同时兼顾法学、公安、公共管理等方向' }
+  ].sort((a, b) => b.score - a.score)[0]
+
+  if (physics < 45 || chemistry < 45) {
+    const fallback = history >= physics ? '史政地' : '物生地'
+    return {
+      combo: fallback,
+      reason: `物理或化学基础偏弱，直接选物化组合风险较高。当前更适合先稳住得分能力，再结合目标专业决定是否保留物理。`,
+      actions: [
+        '先确认目标专业是否强制要求物理或化学。',
+        '用最近两次考试验证物理、化学是否能稳定提升。',
+        '不要只看单科兴趣，要看组合后的总分竞争力。'
+      ]
+    }
+  }
+
+  return {
+    combo: thirdSubject?.combo || '物化生',
+    reason: `物理和化学合计 ${scienceBase} 分，具备保留理工方向的基础。第三科目前以${thirdSubject?.subject || '生物'}更有优势，${thirdSubject?.fit || '专业覆盖更完整'}。`,
+    actions: [
+      '如果目标是临床、药学、生物相关，优先考虑物化生。',
+      '如果地理明显高于生物，且更关注总分稳定性，可考虑物化地。',
+      '如果政治成绩突出且目标偏法学、警校、公共管理，可评估物化政。'
+    ]
+  }
+}
+
 function StepIndicator({ currentStep }) {
-  const steps = ['上传图片', '确认成绩', '分析结果']
+  const steps = ['录入方式', '确认成绩', '分析结果']
 
   return (
-    <div className="flex items-center justify-center mb-8">
+    <div className="flex items-center justify-center mb-3">
       {steps.map((step, index) => (
         <div key={step} className="flex items-center">
           <div className="flex flex-col items-center">
             <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm
+              className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs
                 ${index < currentStep ? 'bg-success text-white' :
                   index === currentStep ? 'bg-primary text-white' :
                   'bg-gray-200 text-gray-500'}`}
             >
-              {index < currentStep ? <Check size={18} /> : index + 1}
+              {index < currentStep ? <Check size={15} /> : index + 1}
             </div>
             <span className={`text-xs mt-2 ${index === currentStep ? 'text-primary font-semibold' : 'text-gray-500'}`}>
               {step}
             </span>
           </div>
           {index < steps.length - 1 && (
-            <div className={`w-16 h-1 mx-2 rounded ${index < currentStep ? 'bg-success' : 'bg-gray-200'}`} />
+            <div className={`w-12 h-1 mx-2 rounded ${index < currentStep ? 'bg-success' : 'bg-gray-200'}`} />
           )}
         </div>
       ))}
@@ -179,9 +287,9 @@ function AIProviderSelector({ value, onChange, customKeys, onCustomKeyChange }) 
   }
 
   return (
-    <div className="card bg-gradient-to-br from-indigo-50/50 to-white border border-indigo-100">
-      <div className="flex items-center gap-2 mb-3">
-        <Brain className="text-primary" size={20} />
+    <div className="bg-white rounded-xl shadow-md p-3 border border-indigo-100">
+      <div className="flex items-center gap-2 mb-2">
+        <Brain className="text-primary" size={17} />
         <span className="font-medium text-gray-700">AI 服务商</span>
       </div>
       <div className="flex gap-2">
@@ -189,7 +297,7 @@ function AIProviderSelector({ value, onChange, customKeys, onCustomKeyChange }) 
           <button
             key={key}
             onClick={() => onChange(key)}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all relative
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all relative
               ${value === key
                 ? 'bg-primary text-white shadow-lg shadow-primary/20'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
@@ -203,13 +311,13 @@ function AIProviderSelector({ value, onChange, customKeys, onCustomKeyChange }) 
           </button>
         ))}
       </div>
-      <div className="mt-3 space-y-2">
+      <div className="mt-2 space-y-1">
         <input
           type="password"
           placeholder={getPlaceholder(value)}
           value={customKeys[value] || ''}
           onChange={(e) => onCustomKeyChange(value, e.target.value)}
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+          className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none"
         />
         <p className="text-xs text-gray-400">
           使用自己的 API Key 可享受更高额度 · 当前已使用内置Key
@@ -255,10 +363,20 @@ function ImageUploadSlot({ title, description, slot, onSelect, onRemove, disable
   }
 
   return (
-    <div className="card space-y-3">
-      <div>
-        <h3 className="text-base font-semibold text-gray-800">{title}</h3>
-        <p className="text-sm text-gray-500 mt-1">{description}</p>
+    <div className="bg-white rounded-xl shadow-md p-3 space-y-3 border border-gray-100">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-gray-800">{title}</h3>
+          <p className="text-xs text-gray-500 mt-1">{description}</p>
+        </div>
+        {slot.preview && (
+          <button
+            onClick={onRemove}
+            className="w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
 
       <input
@@ -271,14 +389,8 @@ function ImageUploadSlot({ title, description, slot, onSelect, onRemove, disable
       />
 
       {slot.preview ? (
-        <div className="relative rounded-2xl overflow-hidden border border-gray-200">
-          <img src={slot.preview} alt={title} className="w-full h-48 object-cover bg-gray-50" />
-          <button
-            onClick={onRemove}
-            className="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/55 text-white flex items-center justify-center"
-          >
-            <Trash2 size={18} />
-          </button>
+        <div className="relative rounded-xl overflow-hidden border border-gray-200">
+          <img src={slot.preview} alt={title} className="w-full h-40 object-cover bg-gray-50" />
         </div>
       ) : (
         <div
@@ -286,20 +398,45 @@ function ImageUploadSlot({ title, description, slot, onSelect, onRemove, disable
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => !disabled && fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all
+          className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all
             ${disabled ? 'opacity-60 cursor-not-allowed' : ''}
             ${isDragging ? 'border-primary bg-indigo-50/50 animate-pulse' : 'border-gray-300 hover:border-primary hover:bg-indigo-50/30'}`}
         >
-          <div className="w-14 h-14 mx-auto mb-4 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-full flex items-center justify-center">
-            <Upload className="text-primary" size={24} />
+          <div className="w-11 h-11 mx-auto mb-3 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-full flex items-center justify-center">
+            <Upload className="text-primary" size={21} />
           </div>
-          <p className="text-base font-medium text-gray-700 mb-2">点击或拖拽上传</p>
+          <p className="text-sm font-medium text-gray-700 mb-2">点击或拖拽上传</p>
           <div className="flex items-center justify-center gap-4 text-xs text-gray-400">
             <span className="flex items-center gap-1"><Camera size={14} /> 拍照</span>
             <span className="flex items-center gap-1"><FileText size={14} /> 截图</span>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function ModeChoice({ mode, onChange }) {
+  const options = [
+    { key: 'upload', label: '导入截图', icon: Upload },
+    { key: 'manual', label: '手动输入', icon: PencilLine }
+  ]
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {options.map(({ key, label, icon: Icon }) => (
+        <button
+          key={key}
+          onClick={() => onChange(key)}
+          className={`h-12 rounded-xl border text-sm font-semibold flex items-center justify-center gap-2 transition-all
+            ${mode === key
+              ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20'
+              : 'bg-white text-gray-600 border-gray-200 hover:border-primary'}`}
+        >
+          <Icon size={18} />
+          <span>{label}</span>
+        </button>
+      ))}
     </div>
   )
 }
@@ -394,7 +531,7 @@ function GradeSelector({ value, onChange }) {
   )
 }
 
-function ScoreEditor({ title, scores, onScoresChange, summary, showFullScore = false }) {
+function ScoreEditor({ title, scores, onScoresChange, summary, showFullScore = false, compact = false }) {
   const handleScoreChange = (index, field, value) => {
     const next = [...scores]
     next[index][field] = value
@@ -410,8 +547,8 @@ function ScoreEditor({ title, scores, onScoresChange, summary, showFullScore = f
   }
 
   return (
-    <div className="bg-gray-50 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-gray-50 rounded-xl p-3">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-700">{title}</span>
           <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">{scores.length} 科目</span>
@@ -425,7 +562,7 @@ function ScoreEditor({ title, scores, onScoresChange, summary, showFullScore = f
       </div>
 
       {summary && (
-        <p className="text-xs text-gray-500 mb-3">{summary}</p>
+        <p className="text-xs text-gray-500 mb-2">{summary}</p>
       )}
 
       <div className={`grid ${showFullScore ? 'grid-cols-[72px_1fr_1fr_36px]' : 'grid-cols-[72px_1fr_36px]'} gap-2 text-xs text-gray-400 px-2 mb-2`}>
@@ -435,22 +572,22 @@ function ScoreEditor({ title, scores, onScoresChange, summary, showFullScore = f
         <span />
       </div>
 
-      <div className="space-y-2">
+      <div className={`${compact ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : 'space-y-2'}`}>
         {scores.map((item, index) => (
-          <div key={`${title}-${index}`} className={`grid ${showFullScore ? 'grid-cols-[72px_1fr_1fr_36px]' : 'grid-cols-[72px_1fr_36px]'} gap-2 items-center bg-white rounded-lg p-2`}>
+          <div key={`${title}-${index}`} className={`grid ${showFullScore ? 'grid-cols-[64px_1fr_1fr_30px]' : 'grid-cols-[64px_1fr_30px]'} gap-2 items-center bg-white rounded-lg p-2`}>
             <input
               type="text"
               value={item.subject}
               onChange={(e) => handleScoreChange(index, 'subject', e.target.value)}
               placeholder="科目"
-              className="px-2 py-1 text-sm border border-gray-200 rounded-lg"
+              className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg"
             />
             <input
               type="number"
               value={item.score}
               onChange={(e) => handleScoreChange(index, 'score', e.target.value)}
               placeholder="分数"
-              className="px-2 py-1 text-sm border border-gray-200 rounded-lg text-center"
+              className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg text-center"
             />
             {showFullScore && (
               <input
@@ -458,9 +595,118 @@ function ScoreEditor({ title, scores, onScoresChange, summary, showFullScore = f
                 value={item.fullScore ?? ''}
                 onChange={(e) => handleScoreChange(index, 'fullScore', e.target.value)}
                 placeholder="满分"
-                className="px-2 py-1 text-sm border border-gray-200 rounded-lg text-center"
+                className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg text-center"
               />
             )}
+            <button
+              onClick={() => handleDelete(index)}
+              className="p-1 text-gray-400 hover:text-red-500"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function mergeScoreRows(scores, maxScores) {
+  const subjectOrder = [...SUBJECTS]
+  const subjects = Array.from(new Set([
+    ...subjectOrder,
+    ...scores.map(item => normalizeSubject(item.subject)).filter(Boolean),
+    ...maxScores.map(item => normalizeSubject(item.subject)).filter(Boolean)
+  ]))
+
+  return subjects.map(subject => {
+    const own = scores.find(item => normalizeSubject(item.subject) === subject)
+    const max = maxScores.find(item => normalizeSubject(item.subject) === subject)
+
+    return {
+      subject,
+      score: own?.score ?? '',
+      maxScore: max?.score ?? ''
+    }
+  }).filter(item => item.score !== '' || item.maxScore !== '' || subjectOrder.includes(item.subject))
+}
+
+function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxScoresChange, summary }) {
+  const rows = mergeScoreRows(scores, maxScores)
+
+  const updateRows = (nextRows) => {
+    onScoresChange(nextRows
+      .filter(item => item.subject && item.score !== '')
+      .map(item => ({ subject: item.subject, score: item.score })))
+    onMaxScoresChange(nextRows
+      .filter(item => item.subject && item.maxScore !== '')
+      .map(item => ({ subject: item.subject, score: item.maxScore })))
+  }
+
+  const handleChange = (index, field, value) => {
+    const nextRows = [...rows]
+    nextRows[index] = { ...nextRows[index], [field]: value }
+    updateRows(nextRows)
+  }
+
+  const handleAdd = () => {
+    updateRows([...rows, { subject: '', score: '', maxScore: '' }])
+  }
+
+  const handleDelete = (index) => {
+    updateRows(rows.filter((_, itemIndex) => itemIndex !== index))
+  }
+
+  return (
+    <div className="bg-gray-50 rounded-xl p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-700">{title}</span>
+          <span className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full">{rows.length} 行</span>
+        </div>
+        <button
+          onClick={handleAdd}
+          className="text-sm text-primary hover:text-indigo-600 flex items-center gap-1"
+        >
+          <Plus size={16} /> 添加
+        </button>
+      </div>
+
+      {summary && (
+        <p className="text-xs text-gray-500 mb-2">{summary}</p>
+      )}
+
+      <div className="grid grid-cols-[64px_1fr_1fr_30px] gap-2 text-xs text-gray-400 px-2 mb-2">
+        <span>科目</span>
+        <span className="text-center">我的成绩</span>
+        <span className="text-center">班级最高分</span>
+        <span />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {rows.map((item, index) => (
+          <div key={`${item.subject || 'new'}-${index}`} className="grid grid-cols-[64px_1fr_1fr_30px] gap-2 items-center bg-white rounded-lg p-2">
+            <input
+              type="text"
+              value={item.subject}
+              onChange={(e) => handleChange(index, 'subject', e.target.value)}
+              placeholder="科目"
+              className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg"
+            />
+            <input
+              type="number"
+              value={item.score}
+              onChange={(e) => handleChange(index, 'score', e.target.value)}
+              placeholder="成绩"
+              className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg text-center"
+            />
+            <input
+              type="number"
+              value={item.maxScore}
+              onChange={(e) => handleChange(index, 'maxScore', e.target.value)}
+              placeholder="可选填"
+              className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg text-center"
+            />
             <button
               onClick={() => handleDelete(index)}
               className="p-1 text-gray-400 hover:text-red-500"
@@ -483,11 +729,11 @@ function SummaryEditor({ meta, onChange }) {
   ]
 
   return (
-    <div className="bg-gray-50 rounded-xl p-4">
-      <div className="mb-3">
+    <div className="bg-gray-50 rounded-xl p-3">
+      <div className="mb-2">
         <span className="text-sm font-medium text-gray-700">识别汇总</span>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         {items.map(item => (
           <div key={item.key}>
             <label className="block text-xs text-gray-500 mb-1">{item.label}</label>
@@ -496,7 +742,7 @@ function SummaryEditor({ meta, onChange }) {
               value={meta[item.key]}
               onChange={(e) => onChange(item.key, e.target.value)}
               placeholder={item.placeholder}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+              className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg"
             />
           </div>
         ))}
@@ -507,16 +753,15 @@ function SummaryEditor({ meta, onChange }) {
 
 function AIAnalysisBanner() {
   return (
-    <div className="bg-gradient-to-r from-primary via-secondary to-accent p-1 rounded-2xl">
-      <div className="bg-white rounded-xl px-6 py-4 text-center">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <Brain className="text-primary" size={24} />
-          <span className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+    <div className="bg-gradient-to-r from-primary via-secondary to-accent p-1 rounded-xl mb-3">
+      <div className="bg-white rounded-lg px-4 py-3 text-center">
+        <div className="flex items-center justify-center gap-2">
+          <Brain className="text-primary" size={20} />
+          <span className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             AI 智能分析
           </span>
-          <Brain className="text-secondary" size={24} />
+          <Brain className="text-secondary" size={20} />
         </div>
-        <p className="text-xs text-gray-500">先识别，再人工确认，最后输出完整分析</p>
       </div>
     </div>
   )
@@ -525,108 +770,121 @@ function AIAnalysisBanner() {
 function FreeAnalysisCard({ analysis }) {
   if (!analysis) return null
 
+  // Build comparison data - show ALL subjects
+  const scoreMap = {}
+  analysis.allScores.forEach(s => {
+    if (s.subject) {
+      scoreMap[s.subject] = { subject: s.subject, score: s.score, maxScore: null, diff: 0, fullScore: analysis.fullScoreData?.[s.subject] || 100 }
+    }
+  })
+  analysis.maxScores && Object.entries(analysis.maxScores).forEach(([subject, maxScore]) => {
+    if (scoreMap[subject]) {
+      scoreMap[subject].maxScore = maxScore
+      scoreMap[subject].diff = maxScore - scoreMap[subject].score
+    }
+  })
+  const comparisonData = Object.values(scoreMap).sort((a, b) => b.diff - a.diff)
+
   return (
-    <div className="card bg-gradient-to-br from-indigo-50 to-white border border-indigo-100">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-          <Sparkles className="text-primary" size={20} />
+    <div className="bg-white rounded-xl shadow-md p-4 border border-indigo-100">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center">
+          <Sparkles className="text-primary" size={18} />
         </div>
         <div>
           <h3 className="font-semibold text-gray-800">AI 简要分析</h3>
-          <p className="text-xs text-gray-500">识别确认后自动生成</p>
+          <p className="text-xs text-gray-500">各科成绩对比</p>
         </div>
       </div>
 
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-            <p className="text-3xl font-bold text-primary">{analysis.average.toFixed(1)}</p>
+      <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-indigo-50 rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-primary">{analysis.average.toFixed(1)}</p>
             <p className="text-xs text-gray-500 mt-1">平均分</p>
           </div>
-          <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-            <p className="text-3xl font-bold text-accent">{analysis.ranking}</p>
-            <p className="text-xs text-gray-500 mt-1">综合判断</p>
+          <div className="bg-violet-50 rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-secondary">{analysis.totalScore}</p>
+            <p className="text-xs text-gray-500 mt-1">个人总分</p>
+          </div>
+          <div className="bg-amber-50 rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-warning">{analysis.maxTotalScore || '-'}</p>
+            <p className="text-xs text-gray-500 mt-1">最高总分</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-xl p-3 text-center shadow-sm">
-            <p className="text-sm text-gray-500">个人总分</p>
-            <p className="text-2xl font-bold text-secondary">{analysis.totalScore}</p>
-          </div>
-          <div className="bg-white rounded-xl p-3 text-center shadow-sm">
-            <p className="text-sm text-gray-500">最高总分</p>
-            <p className="text-2xl font-bold text-warning">{analysis.maxTotalScore || '-'}</p>
-          </div>
-        </div>
-
-        {(analysis.classRank || analysis.gradeRank) && (
-          <div className="bg-white rounded-xl p-3 shadow-sm grid grid-cols-2 gap-3 text-center">
-            <div>
-              <p className="text-sm text-gray-500">班级排名</p>
-              <p className="text-xl font-bold text-primary">{analysis.classRank || '-'}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">年级排名</p>
-              <p className="text-xl font-bold text-secondary">{analysis.gradeRank || '-'}</p>
-            </div>
-          </div>
-        )}
-
-        {analysis.maxScores && Object.keys(analysis.maxScores).length > 0 && (
-          <div>
-            <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-              <TrendingUp size={16} className="text-accent" /> 各科最高分参考
-            </p>
-            <div className="bg-white rounded-xl p-3 shadow-sm">
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                {Object.entries(analysis.maxScores).map(([subject, score]) => (
-                  <div key={subject} className="text-center">
-                    <p className="text-gray-500">{subject}</p>
-                    <p className="font-semibold text-accent">{score}</p>
-                  </div>
+        {/* Comparison Table */}
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+            <TrendingUp size={16} className="text-accent" /> 各科成绩对比
+          </p>
+          <div className="bg-gray-50 rounded-xl p-3">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-gray-500 border-b border-gray-200">
+                  <th className="text-left py-1 px-1">科目</th>
+                  <th className="text-center py-1 px-1">自己</th>
+                  <th className="text-center py-1 px-1">最高</th>
+                  <th className="text-center py-1 px-1">分差</th>
+                  <th className="text-center py-1 px-1">满分</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonData.map((item, idx) => (
+                  <tr key={`${item.subject}-${idx}`} className="border-b border-gray-100 last:border-0">
+                    <td className="py-1.5 px-1 font-medium text-gray-700">{item.subject}</td>
+                    <td className="text-center py-1.5 px-1">{item.score}</td>
+                    <td className="text-center py-1.5 px-1 text-accent">{item.maxScore || '-'}</td>
+                    <td className={`text-center py-1.5 px-1 font-medium ${item.diff > 0 ? 'text-warning' : 'text-success'}`}>
+                      {item.maxScore ? (item.diff > 0 ? `-${item.diff}` : `+${Math.abs(item.diff)}`) : '-'}
+                    </td>
+                    <td className="text-center py-1.5 px-1 text-gray-400">{item.fullScore}</td>
+                  </tr>
                 ))}
-              </div>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-success/5 rounded-xl p-3 border border-success/20">
+            <p className="text-xs font-medium text-success mb-2 flex items-center gap-1">
+              <Award size={14} /> 优势科目
+            </p>
+            <div className="space-y-1">
+              {analysis.strengths.length > 0
+                ? analysis.strengths.map(item => (
+                  <p key={item.subject} className="text-sm text-gray-700">
+                    {item.subject} <span className="text-xs text-gray-500">差{item.diff}分</span>
+                  </p>
+                ))
+                : <p className="text-xs text-gray-400">暂无</p>}
             </div>
           </div>
-        )}
-
-        <div>
-          <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-            <Award size={16} className="text-success" /> 优势科目
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {analysis.strengths.length > 0
-              ? analysis.strengths.map(item => (
-                <span key={item.subject} className="px-3 py-1 bg-success/10 text-success text-sm rounded-full">
-                  {item.subject} ({item.score}分)
-                </span>
-              ))
-              : <span className="text-sm text-gray-400">暂无突出优势</span>}
+          <div className="bg-warning/5 rounded-xl p-3 border border-warning/20">
+            <p className="text-xs font-medium text-warning mb-2 flex items-center gap-1">
+              <Target size={14} /> 待提升科目
+            </p>
+            <div className="space-y-1">
+              {analysis.weaknesses.length > 0
+                ? analysis.weaknesses.map(item => (
+                  <p key={item.subject} className="text-sm text-gray-700">
+                    {item.subject} <span className="text-xs text-gray-500">差{item.diff}分</span>
+                  </p>
+                ))
+                : <p className="text-xs text-gray-400">暂无</p>}
+            </div>
           </div>
         </div>
 
-        <div>
-          <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-            <Target size={16} className="text-warning" /> 待提升科目
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {analysis.weaknesses.length > 0
-              ? analysis.weaknesses.map(item => (
-                <span key={item.subject} className="px-3 py-1 bg-warning/10 text-warning text-sm rounded-full">
-                  {item.subject} (-{item.diff}分)
-                </span>
-              ))
-              : <span className="text-sm text-gray-400">各科目发展均衡</span>}
-          </div>
-        </div>
-
-        <div className="border-t border-gray-100 pt-4">
+        {/* Suggestions */}
+        <div className="border-t border-gray-100 pt-3">
           <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
             <Zap size={16} className="text-primary" /> 学习建议
           </p>
           <ul className="space-y-2">
-            {analysis.suggestions.map(item => (
+            {analysis.suggestions.slice(0, 3).map(item => (
               <li key={item} className="flex items-start gap-2 text-sm text-gray-600">
                 <span className="text-primary mt-0.5">•</span>
                 <span>{item}</span>
@@ -652,55 +910,135 @@ function PremiumAnalysisCard({ analysis }) {
         </div>
         <div>
           <h3 className="font-semibold text-gray-800">AI 深度分析</h3>
-          <p className="text-xs text-gray-500">调试阶段完整显示</p>
+          <p className="text-xs text-gray-500">专业诊断与建议</p>
         </div>
       </div>
 
       <div className="space-y-4">
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-sm font-medium text-gray-700 mb-2">整体判断</p>
-          <p className="text-sm text-gray-600 leading-6">{deepAnalysis.overview}</p>
+        {deepAnalysis.aiReport ? (
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+              {deepAnalysis.aiReport}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <p className="text-sm font-medium text-gray-700 mb-2">整体判断</p>
+              <p className="text-sm text-gray-600 leading-6">{deepAnalysis.overview}</p>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <p className="text-sm font-medium text-gray-700 mb-2">分差诊断</p>
+              <ul className="space-y-2">
+                {deepAnalysis.gapInsights.map((item, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+                    <span className="text-warning mt-0.5">·</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <p className="text-sm font-medium text-gray-700 mb-2">学习执行方案</p>
+              <ul className="space-y-2">
+                {deepAnalysis.actionPlan.map((item, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+                    <span className="text-primary mt-0.5">·</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <p className="text-sm font-medium text-gray-700 mb-2">考试策略</p>
+              <ul className="space-y-2">
+                {deepAnalysis.examTips.map((item, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+                    <span className="text-secondary mt-0.5">·</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl p-4 shadow-lg shadow-amber-200">
+              <p className="text-sm font-medium mb-2">阶段目标</p>
+              <p className="text-sm leading-6">{deepAnalysis.nextGoal}</p>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SubjectSelectionCard({ selection }) {
+  if (!selection) return null
+
+  return (
+    <div className="bg-white rounded-xl shadow-md p-4 border border-emerald-100">
+      <div className="flex items-center gap-2 mb-3">
+        <Target size={18} className="text-success" />
+        <div>
+          <h3 className="font-semibold text-gray-800">高中选科建议</h3>
+          <p className="text-xs text-gray-500">基于当前成绩结构和排名判断</p>
+        </div>
+      </div>
+      <div className="bg-emerald-50 rounded-xl p-3 mb-3">
+        <p className="text-2xl font-bold text-success">{selection.combo}</p>
+        <p className="text-sm text-gray-600 mt-2 leading-6">{selection.reason}</p>
+      </div>
+      <ul className="space-y-2">
+        {selection.actions.map((item, idx) => (
+          <li key={idx} className="flex items-start gap-2 text-sm text-gray-600">
+            <span className="text-success mt-0.5">·</span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function AnalysisEvidenceCard({ analysis }) {
+  if (!analysis?.calculation) return null
+
+  const modelTrace = analysis.modelTrace || {}
+  const calculation = analysis.calculation
+
+  return (
+    <div className="bg-white rounded-xl shadow-md p-4 border border-slate-100">
+      <div className="flex items-center gap-2 mb-3">
+        <Brain size={18} className="text-primary" />
+        <div>
+          <h3 className="font-semibold text-gray-800">调试依据</h3>
+          <p className="text-xs text-gray-500">模型、公式和规则</p>
+        </div>
+      </div>
+
+      <div className="space-y-3 text-sm text-gray-600">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="bg-slate-50 rounded-lg p-3">
+            <p className="text-xs text-gray-500">图片识别模型</p>
+            <p className="font-semibold text-gray-800 mt-1">{modelTrace.visionModel}</p>
+          </div>
+          <div className="bg-slate-50 rounded-lg p-3">
+            <p className="text-xs text-gray-500">数据分析模型</p>
+            <p className="font-semibold text-gray-800 mt-1">{modelTrace.analysisModel}</p>
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-sm font-medium text-gray-700 mb-2">分差诊断</p>
-          <ul className="space-y-2">
-            {deepAnalysis.gapInsights.map(item => (
-              <li key={item} className="flex items-start gap-2 text-sm text-gray-600">
-                <span className="text-warning mt-0.5">•</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-sm font-medium text-gray-700 mb-2">学习执行方案</p>
-          <ul className="space-y-2">
-            {deepAnalysis.actionPlan.map(item => (
-              <li key={item} className="flex items-start gap-2 text-sm text-gray-600">
-                <span className="text-primary mt-0.5">•</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-sm font-medium text-gray-700 mb-2">考试策略</p>
-          <ul className="space-y-2">
-            {deepAnalysis.examTips.map(item => (
-              <li key={item} className="flex items-start gap-2 text-sm text-gray-600">
-                <span className="text-secondary mt-0.5">•</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl p-4 shadow-lg shadow-amber-200">
-          <p className="text-sm font-medium mb-2">阶段目标</p>
-          <p className="text-sm leading-6">{deepAnalysis.nextGoal}</p>
+        <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+          <p>总分：{calculation.totalScoreFormula}</p>
+          <p>平均分：{calculation.averageFormula}</p>
+          <p>{calculation.rankingRule}</p>
+          <p>{calculation.strengthRule}</p>
+          <p>{calculation.weaknessRule}</p>
+          <p>{calculation.cityBasis}</p>
+          <p>{calculation.gradeBasis}</p>
         </div>
       </div>
     </div>
@@ -751,6 +1089,62 @@ function buildOcrPrompt(type) {
     '科目仅允许：语文、数学、英语、物理、化学、生物、历史、地理、政治。',
     '请只返回 JSON 对象，格式为：{"scores":[{"subject":"语文","score":110,"fullScore":120}],"totalScore":0}'
   ].join('')
+}
+
+function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSelection = null) {
+  const scoreText = scores.map(s => `${s.subject}:${s.score}`).join(', ')
+  const maxText = maxScores.length > 0 ? maxScores.map(s => `${s.subject}:${s.maxScore || s.score}`).join(', ') : '未提供'
+  const subjectSelText = subjectSelection ? `本地初步建议：${subjectSelection.combo}。理由：${subjectSelection.reason}` : '无'
+  const fullScoreData = getFullScoreData(city, grade)
+  const fullScoreText = Object.entries(fullScoreData).map(([k, v]) => `${k}:${v}分`).join(', ')
+
+  return [
+    '你是资深的高考成绩分析专家，擅长学情诊断、选科决策和个性化学习规划。',
+    '',
+    '【学生基本信息】',
+    `城市：${city}`,
+    `年级：${grade}`,
+    '',
+    '【各科满分参考】',
+    fullScoreText,
+    '',
+    '【本次成绩数据】',
+    `各科成绩：${scoreText}`,
+    `班级最高分参考：${maxText}`,
+    `总分：${meta.totalScore || '未提供'}`,
+    '',
+    '【本地初步分析参考】',
+    subjectSelText,
+    '',
+    '【分析任务】',
+    '请基于上述数据，输出专业的学情诊断报告：',
+    '',
+    '【输出要求】',
+    '1、语言通俗易懂，适合家长和学生阅读',
+    '2、分析需有数据支撑，结论明确',
+    '3、选科建议需与本地建议保持方向一致，如有调整请说明理由',
+    '4、建议具体可执行，避免空泛',
+    '',
+    '【报告正文】（请严格按以下格式输出，每项200字以内）',
+    '',
+    '1、核心诊断',
+    '[一句话总结整体表现，定位所在分数段水平]',
+    '',
+    '2、各科分差分析',
+    '[逐科分析分差原因，识别失分集中在哪些题型/知识点]',
+    '',
+    '3、选科建议（高中生必填）',
+    '[推荐组合及理由，或说明维持现状的原因]',
+    '',
+    '4、提分优先级',
+    '[按紧急程度排序：最该先补哪科，为什么]',
+    '',
+    '5、具体可执行建议',
+    '[3-5条立即可行动的具体措施]',
+    '',
+    '6、阶段目标',
+    '[下次考试的合理目标及达成路径]'
+  ].join('\n')
 }
 
 function extractJsonPayload(content) {
@@ -822,7 +1216,7 @@ function normalizeOcrPayload(payload, type) {
   }
 }
 
-function buildAnalysis(myScores, maxScores, meta, city, grade) {
+function buildAnalysis(myScores, maxScores, meta, city, grade, modelTrace = {}) {
   const validScores = myScores
     .map(item => ({
       subject: normalizeSubject(item.subject),
@@ -841,6 +1235,7 @@ function buildAnalysis(myScores, maxScores, meta, city, grade) {
   const gradeRank = toNumber(meta.gradeRank)
   const cityProfile = getCityProfile(city)
   const gradeProfile = getGradeProfile(grade)
+  const subjectSelection = isSeniorGrade(grade) ? generateSubjectSelection(validScores) : null
 
   let ranking = '前50%'
   if (gradeRank && gradeRank <= 30) ranking = '年级前列'
@@ -932,9 +1327,22 @@ function buildAnalysis(myScores, maxScores, meta, city, grade) {
     ranking,
     classRank,
     gradeRank,
+    subjectSelection,
+    modelTrace,
+    calculation: {
+      totalScoreFormula: `${validScores.map(item => `${item.subject}${item.score}`).join(' + ')} = ${totalScore}`,
+      averageFormula: `${totalScore} / ${validScores.length} = ${average.toFixed(1)}`,
+      rankingRule: '优先使用年级排名/班级排名判断；没有排名时使用平均分区间估算。',
+      strengthRule: maxScores.length > 0 ? '与最高分差距 <= 10 分判定为优势科目。' : '高于个人平均分 8 分以上判定为优势科目。',
+      weaknessRule: maxScores.length > 0 ? '与最高分差距 >= 15 分判定为待提升科目。' : '低于个人平均分 8 分以上判定为待提升科目。',
+      cityBasis: `${city}：${cityProfile.feature}`,
+      gradeBasis: `${grade}：${gradeProfile.stage}，${gradeProfile.advice}`
+    },
+    allScores: validScores,
     strengths,
     weaknesses,
     suggestions,
+    fullScoreData: getFullScoreData(city, grade),
     maxScores: maxScores.reduce((acc, item) => {
       const subject = normalizeSubject(item.subject)
       const score = toNumber(item.score)
@@ -944,17 +1352,20 @@ function buildAnalysis(myScores, maxScores, meta, city, grade) {
       return acc
     }, {}),
     deepAnalysis: {
-      overview: `当前共识别 ${validScores.length} 科，平均分 ${average.toFixed(1)} 分，总分 ${totalScore} 分。${classRank ? `班级排名第 ${classRank} 名。` : ''}${gradeRank ? `年级排名第 ${gradeRank} 名。` : ''}${cityProfile.feature}。${grade}处于${gradeProfile.stage}，${weaknesses.length > 0 ? '成绩结构存在明显短板，适合先做补弱提总分。' : '成绩结构比较均衡，适合通过稳定发挥继续提分。'}`,
+      overview: `共${validScores.length}科，平均分${average.toFixed(1)}，总分${totalScore}。${cityProfile.feature}。${grade}处于${gradeProfile.stage}，${weaknesses.length > 0 ? '成绩有短板，适合先补弱。' : '成绩均衡，可稳步提升。'}`,
       gapInsights,
       actionPlan,
       examTips,
-      nextGoal
+      nextGoal,
+      subjectSelectionHint: subjectSelection ? `${subjectSelection.combo}：` : '',
+      aiReport: ''
     }
   }
 }
 
 export default function App() {
   const [step, setStep] = useState(0)
+  const [inputMode, setInputMode] = useState('upload')
   const [myImage, setMyImage] = useState(defaultImageSlot)
   const [maxImage, setMaxImage] = useState(defaultImageSlot)
   const [uploading, setUploading] = useState(false)
@@ -967,6 +1378,7 @@ export default function App() {
   const [error, setError] = useState(null)
   const [warnings, setWarnings] = useState([])
   const [aiProvider, setAiProvider] = useState('aliyun')
+  const [analyzing, setAnalyzing] = useState(false)
   const [customKeys, setCustomKeys] = useState({
     aliyun: '',
     minimax: '',
@@ -1059,13 +1471,39 @@ export default function App() {
     return normalizeOcrPayload(payload, type)
   }
 
+  const runDeepAnalysis = async (baseAnalysis, normalizedMyScores, normalizedMaxScores) => {
+    const response = await fetch(ANALYSIS_PROVIDER.endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${customKeys.aliyun?.trim() || ANALYSIS_PROVIDER.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: ANALYSIS_PROVIDER.model,
+        temperature: 0.2,
+        messages: [{
+          role: 'user',
+          content: buildDeepAnalysisPrompt(normalizedMyScores, normalizedMaxScores, meta, city, grade, baseAnalysis?.subjectSelection)
+        }]
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(`深度分析调用失败: ${errorData.error?.message || response.status}`)
+    }
+
+    const data = await response.json()
+    return data.choices?.[0]?.message?.content || ''
+  }
+
   const handleRecognize = async () => {
     if (!city || !grade) {
       alert('请选择城市和年级')
       return
     }
-    if (!myImage.file || !maxImage.file) {
-      alert('请分别上传个人成绩图和最高分图')
+    if (!myImage.file) {
+      alert('请上传成绩截图')
       return
     }
 
@@ -1083,15 +1521,15 @@ export default function App() {
     try {
       setProgress(15)
       const myResult = await runOcr(myImage.file, 'my', aiProvider)
-      setProgress(60)
-      const maxResult = await runOcr(maxImage.file, 'max', aiProvider)
+      let maxResult = { scores: [], totalScore: null, warnings: [] }
+      setProgress(maxImage.file ? 60 : 85)
+      if (maxImage.file) {
+        maxResult = await runOcr(maxImage.file, 'max', aiProvider)
+      }
       setProgress(85)
 
       if (myResult.scores.length === 0) {
         throw new Error('个人成绩图未识别到有效分数，请更换更清晰的截图')
-      }
-      if (maxResult.scores.length === 0) {
-        throw new Error('最高分图未识别到有效分数，请更换更清晰的截图')
       }
 
       const calculatedTotal = calculateTotalScore(myResult.scores)
@@ -1125,7 +1563,7 @@ export default function App() {
     }
   }
 
-  const handleConfirmScores = () => {
+  const handleConfirmScores = async () => {
     const normalizedMyScores = scores
       .map(item => ({
         subject: normalizeSubject(item.subject),
@@ -1162,15 +1600,64 @@ export default function App() {
     setScores(normalizedMyScores)
     setMaxScores(normalizedMaxScores)
 
-    const nextAnalysis = buildAnalysis(normalizedMyScores, normalizedMaxScores, meta, city, grade)
+    const modelTrace = {
+      visionModel: inputMode === 'upload' ? `${AI_PROVIDERS[aiProvider].name} ${AI_PROVIDERS[aiProvider].model}` : '手动输入，未使用图片识别模型',
+      analysisModel: `${ANALYSIS_PROVIDER.name} ${ANALYSIS_PROVIDER.model}`
+    }
+    const nextAnalysis = buildAnalysis(normalizedMyScores, normalizedMaxScores, meta, city, grade, modelTrace)
     if (!nextAnalysis) {
       setError('分析所需数据不足，请检查识别结果')
       return
     }
 
     setError(null)
-    setAnalysis(nextAnalysis)
-    setStep(2)
+    setAnalyzing(true)
+
+    try {
+      const aiReport = await runDeepAnalysis(nextAnalysis, normalizedMyScores, normalizedMaxScores)
+      setAnalysis({
+        ...nextAnalysis,
+        deepAnalysis: {
+          ...nextAnalysis.deepAnalysis,
+          aiReport
+        }
+      })
+    } catch (analysisError) {
+      console.error('Deep analysis error:', analysisError)
+      setWarnings(prev => [...prev, analysisError.message || '深度分析模型调用失败，已展示本地分析结果'])
+      setAnalysis(nextAnalysis)
+    } finally {
+      setAnalyzing(false)
+      setStep(2)
+    }
+  }
+
+  const handleManualInput = () => {
+    if (!city || !grade) {
+      alert('请选择城市和年级')
+      return
+    }
+
+    setScores(getEmptyScores())
+    setMaxScores([])
+    setMeta(defaultMeta())
+    setWarnings([])
+    setError(null)
+    setAnalysis(null)
+    setStep(1)
+  }
+
+  const handleInputModeChange = (mode) => {
+    setInputMode(mode)
+    setError(null)
+
+    if (mode === 'manual' && scores.length === 0) {
+      setScores(getEmptyScores())
+      setMaxScores([])
+      setMeta(defaultMeta())
+      setWarnings([])
+      setAnalysis(null)
+    }
   }
 
   const handleReset = () => {
@@ -1178,6 +1665,7 @@ export default function App() {
     if (maxImage.preview) URL.revokeObjectURL(maxImage.preview)
 
     setStep(0)
+    setInputMode('upload')
     setMyImage(defaultImageSlot())
     setMaxImage(defaultImageSlot())
     setScores([])
@@ -1186,152 +1674,215 @@ export default function App() {
     setError(null)
     setWarnings([])
     setAnalysis(null)
+    setAnalyzing(false)
     setProgress(0)
   }
 
   return (
-    <div className="min-h-screen py-6 px-4 bg-gradient-to-b from-indigo-50/50 to-white">
-      <div className="max-w-md mx-auto">
+    <div className="min-h-screen lg:h-[100svh] py-3 px-3 bg-gradient-to-b from-indigo-50/50 to-white lg:overflow-hidden">
+      <div className="max-w-5xl mx-auto h-full flex flex-col">
         <AIAnalysisBanner />
 
         <StepIndicator currentStep={step} />
 
         {step === 0 && (
-          <div className="animate-fadeIn space-y-4">
-            <AIProviderSelector
-              value={aiProvider}
-              onChange={setAiProvider}
-              customKeys={customKeys}
-              onCustomKeyChange={handleCustomKeyChange}
-            />
+          <div className="animate-fadeIn grid lg:grid-cols-[1fr_1.05fr] gap-3 min-h-0">
+            <div className="space-y-3">
+              <AIProviderSelector
+                value={aiProvider}
+                onChange={setAiProvider}
+                customKeys={customKeys}
+                onCustomKeyChange={handleCustomKeyChange}
+              />
 
-            <ImageUploadSlot
-              title="学生成绩图"
-              description="上传包含各科成绩、总分、班级排名或年级排名的截图"
-              slot={myImage}
-              onSelect={(file) => handleImageSelect('my', file)}
-              onRemove={() => handleImageRemove('my')}
-              disabled={uploading}
-            />
-
-            <ImageUploadSlot
-              title="班级/年级最高分图"
-              description="上传包含各科最高分和最高总分的截图"
-              slot={maxImage}
-              onSelect={(file) => handleImageSelect('max', file)}
-              onRemove={() => handleImageRemove('max')}
-              disabled={uploading}
-            />
-
-            <CitySelector value={city} onChange={setCity} />
-            <GradeSelector value={grade} onChange={setGrade} />
-
-            {uploading && (
-              <div className="card">
-                <div className="flex items-center gap-3 mb-3">
-                  <RefreshCw size={18} className="animate-spin text-primary" />
-                  <span className="text-sm text-gray-700">正在识别图片内容...</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
-                </div>
-                <p className="text-xs text-gray-400 mt-2">{progress}%</p>
+              <div className="grid grid-cols-2 gap-3">
+                <CitySelector value={city} onChange={setCity} />
+                <GradeSelector value={grade} onChange={setGrade} />
               </div>
-            )}
 
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
-                <AlertCircle size={18} />
-                <span>{error}</span>
-              </div>
-            )}
+              <ModeChoice mode={inputMode} onChange={handleInputModeChange} />
 
-            <button
-              onClick={handleRecognize}
-              disabled={!myImage.file || !maxImage.file || uploading}
-              className="w-full btn-primary mt-6 flex items-center justify-center gap-2"
-            >
-              {uploading ? (
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
+                  <AlertCircle size={18} />
+                  <span>{error}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {inputMode === 'upload' ? (
                 <>
-                  <RefreshCw size={20} className="animate-spin" />
-                  <span>识别中...</span>
+                  <ImageUploadSlot
+                    title="成绩截图"
+                    description="导入学生成绩截图，系统会识别各科分数、总分和排名。"
+                    slot={myImage}
+                    onSelect={(file) => handleImageSelect('my', file)}
+                    onRemove={() => handleImageRemove('my')}
+                    disabled={uploading}
+                  />
+
+                  <ImageUploadSlot
+                    title="最高分截图（可选）"
+                    description="有班级/年级最高分截图时导入，可提升对比分析质量。"
+                    slot={maxImage}
+                    onSelect={(file) => handleImageSelect('max', file)}
+                    onRemove={() => handleImageRemove('max')}
+                    disabled={uploading}
+                  />
+
+                  {uploading && (
+                    <div className="bg-white rounded-xl shadow-md p-3 border border-gray-100">
+                      <div className="flex items-center gap-3 mb-3">
+                        <RefreshCw size={18} className="animate-spin text-primary" />
+                        <span className="text-sm text-gray-700">正在识别图片内容...</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleRecognize}
+                    disabled={!myImage.file || uploading}
+                    className="w-full btn-primary flex items-center justify-center gap-2"
+                  >
+                    {uploading ? (
+                      <>
+                        <RefreshCw size={20} className="animate-spin" />
+                        <span>识别中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>导入并识别</span>
+                        <ChevronRight size={20} />
+                      </>
+                    )}
+                  </button>
                 </>
               ) : (
-                <>
-                  <span>开始识别</span>
-                  <ChevronRight size={20} />
-                </>
+                <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <PencilLine size={22} className="text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-800">手动输入成绩</h3>
+                      <p className="text-sm text-gray-500 mt-1">在当前页面填写各科分数、总分和排名。</p>
+                    </div>
+                  </div>
+
+                  <SummaryEditor meta={meta} onChange={handleMetaChange} />
+                  <CombinedScoreEditor
+                    title="成绩输入"
+                    scores={scores}
+                    maxScores={maxScores}
+                    onScoresChange={setScores}
+                    onMaxScoresChange={setMaxScores}
+                    summary="上排为自己成绩，下排为班级最高分（不填则不显示分差）"
+                  />
+
+                  <button
+                    onClick={handleConfirmScores}
+                    disabled={analyzing}
+                    className="w-full btn-primary flex items-center justify-center gap-2"
+                  >
+                    {analyzing ? (
+                      <>
+                        <RefreshCw size={20} className="animate-spin" />
+                        <span>分析中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={20} />
+                        <span>直接生成分析</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
           </div>
         )}
 
         {step === 1 && (
-          <div className="animate-fadeIn space-y-4">
-            <div className="card bg-gradient-to-br from-indigo-50/50 to-white border border-indigo-100">
-              <p className="text-sm text-gray-600 leading-6">
-                已识别出成绩，请先核对并手动修正。确认无误后，再开始进一步分析。
-              </p>
+          <div className="animate-fadeIn grid lg:grid-cols-[0.85fr_1.15fr] gap-3 min-h-0">
+            <div className="space-y-3">
+              <SummaryEditor meta={meta} onChange={handleMetaChange} />
+
+              {warnings.length > 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+                  <div className="font-medium mb-2">识别提醒</div>
+                  <ul className="space-y-1">
+                    {warnings.map(item => (
+                      <li key={item}>• {item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
+                  <AlertCircle size={18} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <div className="bg-white rounded-xl shadow-md p-3 border border-gray-100">
+                <p className="text-sm text-gray-600 leading-6">
+                  核对每科真实分数。班级排名和年级排名填在汇总区，不放进科目分数。
+                </p>
+              </div>
+
+              <button
+                onClick={handleConfirmScores}
+                disabled={analyzing}
+                className="w-full btn-primary flex items-center justify-center gap-2"
+              >
+                {analyzing ? (
+                  <>
+                    <RefreshCw size={20} className="animate-spin" />
+                    <span>分析中...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={20} />
+                    <span>确认并分析</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setStep(0)}
+                className="w-full btn-secondary"
+              >
+                返回
+              </button>
             </div>
 
-            {warnings.length > 0 && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
-                <div className="font-medium mb-2">识别提醒</div>
-                <ul className="space-y-1">
-                  {warnings.map(item => (
-                    <li key={item}>• {item}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
-                <AlertCircle size={18} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <SummaryEditor meta={meta} onChange={handleMetaChange} />
-            <ScoreEditor
-              title="个人成绩"
-              scores={scores}
-              onScoresChange={setScores}
-              summary="个人成绩图里可能同时有分数、班级排名、年级排名。这里每行只保留该科真实分数，排名请填在上方汇总区。"
-            />
-            <ScoreEditor
-              title="最高分参考"
-              scores={maxScores}
-              onScoresChange={setMaxScores}
-              summary="这里每行依次是科目、最高分、满分。如果某科最高分未识别完整，可在这里补录。"
-              showFullScore
-            />
-
-            <button
-              onClick={handleConfirmScores}
-              className="w-full btn-primary mt-4 flex items-center justify-center gap-2"
-            >
-              <Sparkles size={20} />
-              <span>确认成绩并开始分析</span>
-            </button>
-
-            <button
-              onClick={() => setStep(0)}
-              className="w-full btn-secondary mt-2"
-            >
-              返回重新识别
-            </button>
+            <div className="space-y-3 lg:max-h-[calc(100svh-150px)] lg:overflow-y-auto lg:pr-1">
+              <CombinedScoreEditor
+                title="成绩确认"
+                scores={scores}
+                maxScores={maxScores}
+                onScoresChange={setScores}
+                onMaxScoresChange={setMaxScores}
+                summary="上排为自己成绩，下排为班级最高分（不填则不显示分差）"
+              />
+            </div>
           </div>
         )}
 
         {step === 2 && analysis && (
-          <div className="animate-slideUp space-y-4">
-            <div className="text-center">
-              <p className="text-sm text-gray-500 mb-2">分析完成</p>
-              <p className="text-xs text-gray-400">
-                {city} · {grade} · {AI_PROVIDERS[aiProvider].name}
-              </p>
-            </div>
+          <div className="animate-slideUp grid lg:grid-cols-[0.95fr_1.05fr] gap-3 min-h-0">
+            <div className="space-y-3">
+              <div className="text-center bg-white rounded-xl shadow-md p-3 border border-gray-100">
+                <p className="text-sm text-gray-500 mb-1">分析完成</p>
+                <p className="text-xs text-gray-400">
+                  {city} · {grade} · {AI_PROVIDERS[aiProvider].name}
+                </p>
+              </div>
 
             {warnings.length > 0 && (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
@@ -1345,14 +1896,20 @@ export default function App() {
             )}
 
             <FreeAnalysisCard analysis={analysis} />
-            <PremiumAnalysisCard analysis={analysis} />
+            <SubjectSelectionCard selection={analysis.subjectSelection} />
+            <AnalysisEvidenceCard analysis={analysis} />
 
             <button
               onClick={handleReset}
-              className="w-full btn-secondary mt-4"
+              className="w-full btn-secondary"
             >
               分析新成绩
             </button>
+            </div>
+
+            <div className="lg:max-h-[calc(100svh-150px)] lg:overflow-y-auto lg:pr-1">
+              <PremiumAnalysisCard analysis={analysis} />
+            </div>
           </div>
         )}
 
