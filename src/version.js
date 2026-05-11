@@ -3,11 +3,23 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.7.5';
+export const VERSION = '1.7.6';
 export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-11';
+export const BUILD_NUMBER = '20260511-12';
 
 export const CHANGELOG = [
+  {
+    version: '1.7.6',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      '考试记录固定显示在总分趋势下方，不受科目曲线折叠影响',
+      '调试依据默认收起，点击后展示模型、公式和规则',
+      'AI报告展示时清理标题前的#符号，并在提示词中禁止输出#标题',
+      '趋势判断改为基于完整分数序列，增加波动幅度、升降次数和最大单次下滑',
+      '默认不输出各科趋势分析与建议章节，改为提示补充各题型分数和丢分情况'
+    ]
+  },
   {
     version: '1.7.5',
     date: '2026-05-11',

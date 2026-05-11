@@ -251,6 +251,64 @@ function buildTrendDataset(records) {
   }
 }
 
+function analyzeScoreSeries(points) {
+  if (!points || points.length === 0) {
+    return {
+      diff: null,
+      direction: '暂无数据',
+      volatility: 0,
+      maxDrop: 0,
+      risingCount: 0,
+      fallingCount: 0
+    }
+  }
+
+  if (points.length === 1) {
+    return {
+      diff: 0,
+      direction: '仅一次记录',
+      volatility: 0,
+      maxDrop: 0,
+      risingCount: 0,
+      fallingCount: 0
+    }
+  }
+
+  const deltas = points.slice(1).map((point, index) => {
+    return Math.round((point.score - points[index].score) * 10) / 10
+  })
+  const risingCount = deltas.filter(delta => delta > 0).length
+  const fallingCount = deltas.filter(delta => delta < 0).length
+  const maxDrop = Math.min(...deltas, 0)
+  const maxRise = Math.max(...deltas, 0)
+  const scores = points.map(point => point.score)
+  const volatility = Math.round((Math.max(...scores) - Math.min(...scores)) * 10) / 10
+  const diff = Math.round((points[points.length - 1].score - points[0].score) * 10) / 10
+
+  let direction = '基本稳定'
+  if (risingCount >= fallingCount + 2 && diff > 0) {
+    direction = '持续上升'
+  } else if (fallingCount >= risingCount + 2 && diff < 0) {
+    direction = '持续下降'
+  } else if (Math.abs(maxRise) >= 8 && Math.abs(maxDrop) >= 8) {
+    direction = '波动明显'
+  } else if (diff > 0) {
+    direction = '震荡上升'
+  } else if (diff < 0) {
+    direction = '震荡下降'
+  }
+
+  return {
+    diff,
+    direction,
+    volatility,
+    maxDrop: Math.abs(maxDrop),
+    risingCount,
+    fallingCount,
+    deltas
+  }
+}
+
 function buildTrendAnalysis(records, currentScores, currentRecordMeta = {}) {
   const currentRecord = currentScores?.length > 0
     ? {
@@ -274,12 +332,14 @@ function buildTrendAnalysis(records, currentScores, currentRecordMeta = {}) {
 
   const totalFirst = series.total.points[0]
   const totalLast = series.total.points[series.total.points.length - 1]
-  const totalDiff = Math.round((totalLast.score - totalFirst.score) * 10) / 10
+  const totalTrend = analyzeScoreSeries(series.total.points)
+  const totalDiff = totalTrend.diff || 0
   const items = series.subjects.map(subjectSeries => {
     const points = subjectSeries.points
     const first = points[0]
     const last = points[points.length - 1]
-    const diff = points.length > 1 ? Math.round((last.score - first.score) * 10) / 10 : null
+    const trend = analyzeScoreSeries(points)
+    const diff = points.length > 1 ? trend.diff : null
     return {
       subject: subjectSeries.label,
       previous: points.length > 1 ? first.score : null,
@@ -288,7 +348,8 @@ function buildTrendAnalysis(records, currentScores, currentRecordMeta = {}) {
       startDate: first.date,
       endDate: last.date,
       points,
-      status: diff === null ? '新增记录' : diff > 0 ? '进步' : diff < 0 ? '退步' : '持平'
+      trend,
+      status: diff === null ? '新增记录' : trend.direction
     }
   })
   const improved = items.filter(item => item.diff !== null && item.diff > 0)
@@ -302,7 +363,8 @@ function buildTrendAnalysis(records, currentScores, currentRecordMeta = {}) {
       diff: totalDiff,
       startDate: totalFirst.date,
       endDate: totalLast.date,
-      status: totalDiff > 0 ? '进步' : totalDiff < 0 ? '退步' : '持平',
+      trend: totalTrend,
+      status: totalTrend.direction,
       points: series.total.points
     },
     items,
@@ -651,6 +713,20 @@ function TrendAnalysis({ history, city, grade }) {
   const scoreChange = latestScore - firstScore
   const scoreChangePercent = firstScore > 0 ? ((scoreChange / firstScore) * 100).toFixed(1) : 0
   const subjectColors = ['#6366F1', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6', '#F97316', '#64748B']
+  const recordList = (
+    <div className="pt-3 border-t border-gray-100">
+      <p className="text-sm font-medium text-gray-700 mb-2">考试记录</p>
+      <div className="space-y-2 max-h-40 overflow-y-auto">
+        {recentHistory.map((h) => (
+          <div key={h.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+            <span className="text-gray-500">{getExamDate(h)}</span>
+            <span className="font-medium text-gray-700">{h.totalScore}分</span>
+            <span className="text-gray-400">{h.city || city} · {h.grade || grade}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 
   return (
     <div className="bg-white rounded-xl shadow-md p-4 border border-indigo-100">
@@ -688,8 +764,10 @@ function TrendAnalysis({ history, city, grade }) {
         <ScoreLineChart title="总分趋势" points={trendDataset.total.points} color="#6366F1" height={140} />
       </div>
 
+      {recordList}
+
       {showSubjects && (
-        <div className="space-y-4 pt-4 border-t border-gray-100">
+        <div className="space-y-4 pt-4 mt-4 border-t border-gray-100">
           <div>
             <p className="text-sm font-medium text-gray-700">各科成绩曲线</p>
             <p className="text-xs text-gray-400 mt-1">竖坐标为分数，横坐标为考试日期。</p>
@@ -698,7 +776,8 @@ function TrendAnalysis({ history, city, grade }) {
             {trendDataset.subjects.map((series, index) => {
               const first = series.points[0]
               const last = series.points[series.points.length - 1]
-              const diff = series.points.length > 1 ? Math.round((last.score - first.score) * 10) / 10 : 0
+              const trend = analyzeScoreSeries(series.points)
+              const diff = series.points.length > 1 ? trend.diff : 0
               return (
                 <div key={series.label} className="space-y-2">
                   <ScoreLineChart
@@ -709,25 +788,12 @@ function TrendAnalysis({ history, city, grade }) {
                   />
                   <p className={`text-xs ${diff >= 0 ? 'text-success' : 'text-red-500'}`}>
                     {series.points.length > 1
-                      ? `${formatDateLabel(first.date)} 到 ${formatDateLabel(last.date)}：${diff >= 0 ? '+' : ''}${diff} 分`
+                      ? `${formatDateLabel(first.date)} 到 ${formatDateLabel(last.date)}：${trend.direction}，${diff >= 0 ? '+' : ''}${diff} 分，波动 ${trend.volatility} 分`
                       : '只有一次记录，暂不能判断变化。'}
                   </p>
                 </div>
               )
             })}
-          </div>
-
-          <div className="pt-2 border-t border-gray-100">
-            <p className="text-sm font-medium text-gray-700 mb-2">考试记录</p>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {recentHistory.map((h) => (
-                <div key={h.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
-                  <span className="text-gray-500">{getExamDate(h)}</span>
-                  <span className="font-medium text-gray-700">{h.totalScore}分</span>
-                  <span className="text-gray-400">{h.city || city} · {h.grade || grade}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       )}
@@ -1382,6 +1448,7 @@ function PremiumAnalysisCard({ analysis }) {
   if (!analysis?.deepAnalysis) return null
 
   const { deepAnalysis } = analysis
+  const cleanAiReport = sanitizeAiReport(deepAnalysis.aiReport)
 
   return (
     <div className="card bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200">
@@ -1396,10 +1463,12 @@ function PremiumAnalysisCard({ analysis }) {
       </div>
 
       <div className="space-y-4">
-        {deepAnalysis.aiReport ? (
+        <TrendDetailNotice />
+
+        {cleanAiReport ? (
           <div className="bg-white rounded-xl p-4 shadow-sm">
             <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-              {deepAnalysis.aiReport}
+              {cleanAiReport}
             </div>
           </div>
         ) : (
@@ -1456,6 +1525,30 @@ function PremiumAnalysisCard({ analysis }) {
   )
 }
 
+function TrendDetailNotice() {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="bg-white/80 rounded-xl p-4 shadow-sm border border-amber-100">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between gap-3 text-left"
+      >
+        <div>
+          <p className="text-sm font-medium text-gray-800">各科趋势深度分析说明</p>
+          <p className="text-xs text-gray-500 mt-1">默认只展示总分和各科分数曲线，不展开分题型趋势诊断。</p>
+        </div>
+        <ChevronRight className={`text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} size={18} />
+      </button>
+      {expanded && (
+        <div className="mt-3 text-sm text-gray-600 leading-6">
+          如果需要分析每门学科的真实变化原因，请拍摄或手动输入各科试卷里每个部分的分数和丢分情况，例如英语的选择题、填空题、判断题、作文题等。只有总分和学科总分时，系统只能判断分数曲线变化，不能准确定位题型短板。
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SubjectSelectionCard({ selection }) {
   if (!selection) return null
 
@@ -1487,20 +1580,27 @@ function SubjectSelectionCard({ selection }) {
 function AnalysisEvidenceCard({ analysis }) {
   if (!analysis?.calculation) return null
 
+  const [expanded, setExpanded] = useState(false)
   const modelTrace = analysis.modelTrace || {}
   const calculation = analysis.calculation
 
   return (
     <div className="bg-white rounded-xl shadow-md p-4 border border-slate-100">
-      <div className="flex items-center gap-2 mb-3">
-        <Brain size={18} className="text-primary" />
-        <div>
-          <h3 className="font-semibold text-gray-800">调试依据</h3>
-          <p className="text-xs text-gray-500">模型、公式和规则</p>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between gap-3 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Brain size={18} className="text-primary" />
+          <div>
+            <h3 className="font-semibold text-gray-800">调试依据</h3>
+            <p className="text-xs text-gray-500">模型、公式和规则，默认收起</p>
+          </div>
         </div>
-      </div>
+        <ChevronRight className={`text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} size={18} />
+      </button>
 
-      <div className="space-y-3 text-sm text-gray-600">
+      {expanded && <div className="space-y-3 text-sm text-gray-600 mt-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div className="bg-slate-50 rounded-lg p-3">
             <p className="text-xs text-gray-500">图片识别模型</p>
@@ -1521,7 +1621,7 @@ function AnalysisEvidenceCard({ analysis }) {
           <p>{calculation.cityBasis}</p>
           <p>{calculation.gradeBasis}</p>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }
@@ -1546,6 +1646,16 @@ function calculateTotalScore(scores) {
 
 function getCustomApiKey(providerKey, customKeys) {
   return customKeys[providerKey]?.trim() || AI_PROVIDERS[providerKey].apiKey
+}
+
+function sanitizeAiReport(report) {
+  if (!report || typeof report !== 'string') return ''
+
+  return report
+    .split('\n')
+    .map(line => line.replace(/^\s{0,3}#{1,6}\s*/, ''))
+    .join('\n')
+    .trim()
 }
 
 function buildOcrPrompt(type) {
@@ -1583,8 +1693,9 @@ function formatTrendForPrompt(trendAnalysis) {
   const subjectLines = trendAnalysis.items
     .map(item => {
       const points = item.points?.map(point => `${point.date}:${point.score}`).join(' -> ') || `${item.current}`
-      const diffText = item.diff === null ? '暂无可比变化' : `变化${item.diff >= 0 ? '+' : ''}${item.diff}分`
-      return `${item.subject}：${points}，${diffText}，状态${item.status}`
+      const trend = item.trend || analyzeScoreSeries(item.points || [])
+      const diffText = item.diff === null ? '暂无可比变化' : `首末变化${item.diff >= 0 ? '+' : ''}${item.diff}分`
+      return `${item.subject}：${points}，${diffText}，整体趋势${trend.direction}，期间波动${trend.volatility || 0}分，上升${trend.risingCount || 0}次，下降${trend.fallingCount || 0}次，最大单次下滑${trend.maxDrop || 0}分`
     })
     .join('\n')
 
@@ -1629,8 +1740,11 @@ function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSe
     '2、分析需有数据支撑，结论明确',
     '3、选科建议需与本地建议保持方向一致，如有调整请说明理由',
     '4、建议具体可执行，避免空泛',
+    '5、标题前不要使用 # 号，也不要输出 Markdown 标题符号',
+    '6、不要默认输出“各科趋势分析与建议”这个独立章节；如需提到趋势，只在核心诊断或提分优先级中简要引用',
+    '7、判断趋势时必须看完整分数序列，包括连续上升/下降次数、波动幅度和最大单次下滑，不能只比较第一次和最后一次',
     '',
-    '【报告正文】（请严格按以下格式输出，每项200字以内）',
+    '【报告正文】（请严格按以下格式输出，每项200字以内；标题不要带 #）',
     '',
     '1、核心诊断',
     '[一句话总结整体表现，定位所在分数段水平]',
@@ -1638,19 +1752,16 @@ function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSe
     '2、各科分差分析',
     '[逐科分析与班级最高分/满分的差距，识别失分集中在哪些题型/知识点]',
     '',
-    '3、各科趋势分析与建议',
-    '[必须逐科分析历史曲线：上升、下降或波动，并给出每科对应建议。不要只分析总分]',
-    '',
-    '4、选科建议（高中生必填）',
+    '3、选科建议（高中生必填）',
     '[推荐组合及理由，或说明维持现状的原因]',
     '',
-    '5、提分优先级',
+    '4、提分优先级',
     '[按紧急程度排序：最该先补哪科，为什么]',
     '',
-    '6、具体可执行建议',
+    '5、具体可执行建议',
     '[3-5条立即可行动的具体措施]',
     '',
-    '7、阶段目标',
+    '6、阶段目标',
     '[下次考试的合理目标及达成路径]'
   ].join('\n')
 }
