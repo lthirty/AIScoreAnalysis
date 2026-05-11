@@ -3,11 +3,21 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.7.6';
+export const VERSION = '1.7.7';
 export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-12';
+export const BUILD_NUMBER = '20260511-13';
 
 export const CHANGELOG = [
+  {
+    version: '1.7.7',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      '各科趋势说明增加学科名前缀',
+      'AI深度分析禁止在未看到试卷或题型数据时编造具体失分原因',
+      '各科分差分析改为提示客户导入试卷照片或输入题型得分和丢分情况'
+    ]
+  },
   {
     version: '1.7.6',
     date: '2026-05-11',

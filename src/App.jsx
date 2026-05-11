@@ -788,7 +788,7 @@ function TrendAnalysis({ history, city, grade }) {
                   />
                   <p className={`text-xs ${diff >= 0 ? 'text-success' : 'text-red-500'}`}>
                     {series.points.length > 1
-                      ? `${formatDateLabel(first.date)} 到 ${formatDateLabel(last.date)}：${trend.direction}，${diff >= 0 ? '+' : ''}${diff} 分，波动 ${trend.volatility} 分`
+                      ? `${series.label}：${formatDateLabel(first.date)} 到 ${formatDateLabel(last.date)}，${trend.direction}，${diff >= 0 ? '+' : ''}${diff} 分，波动 ${trend.volatility} 分`
                       : '只有一次记录，暂不能判断变化。'}
                   </p>
                 </div>
@@ -1743,6 +1743,8 @@ function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSe
     '5、标题前不要使用 # 号，也不要输出 Markdown 标题符号',
     '6、不要默认输出“各科趋势分析与建议”这个独立章节；如需提到趋势，只在核心诊断或提分优先级中简要引用',
     '7、判断趋势时必须看完整分数序列，包括连续上升/下降次数、波动幅度和最大单次下滑，不能只比较第一次和最后一次',
+    '8、没有看到试卷照片、题型得分或每部分丢分数据时，绝不能编造“阅读理解、作文、选择题、填空题”等具体失分原因',
+    '9、如果缺少题型/小题数据，只能说明目前只能基于总分、各科分数、最高分和历史曲线判断；要提示客户导入各科试卷照片，或输入各科试卷里每个部分的分数和丢分情况，例如英语的选择题、填空题、判断题、作文题等',
     '',
     '【报告正文】（请严格按以下格式输出，每项200字以内；标题不要带 #）',
     '',
@@ -1750,7 +1752,7 @@ function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSe
     '[一句话总结整体表现，定位所在分数段水平]',
     '',
     '2、各科分差分析',
-    '[逐科分析与班级最高分/满分的差距，识别失分集中在哪些题型/知识点]',
+    '[只能逐科分析与班级最高分/满分的分差和历史曲线表现。不要推断具体题型失分；如需定位失分原因，请提示客户导入各科试卷照片，或输入每个部分的得分和丢分情况，例如英语选择题、填空题、判断题、作文题等]',
     '',
     '3、选科建议（高中生必填）',
     '[推荐组合及理由，或说明维持现状的原因]',
