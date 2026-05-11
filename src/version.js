@@ -3,11 +3,21 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.7.3';
+export const VERSION = '1.7.4';
 export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-09';
+export const BUILD_NUMBER = '20260511-10';
 
 export const CHANGELOG = [
+  {
+    version: '1.7.4',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      'README 增加每次修改后必须同步到 GitHub 的维护规则',
+      'README 同步 Rayna / Xulei 模拟微信账号与用户隔离历史记录说明',
+      '同步 package、HTML 和应用显示版本号到 1.7.4'
+    ]
+  },
   {
     version: '1.7.3',
     date: '2026-05-11',
