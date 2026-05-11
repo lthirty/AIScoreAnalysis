@@ -3,11 +3,24 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.7.9';
+export const VERSION = '1.8.0';
 export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-15';
+export const BUILD_NUMBER = '20260511-16';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.0',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      '第4步命名为AI增强分析',
+      '首页显示历史趋势，并支持编辑或删除考试记录',
+      'AI基础分析页的历史趋势包含本次成绩',
+      '成绩异常标红改为仅当个人成绩超过本学科满分时触发',
+      '删除成绩表中的删除全部已填成绩按钮',
+      '每个非首页步骤增加返回上一步入口'
+    ]
+  },
   {
     version: '1.7.9',
     date: '2026-05-11',

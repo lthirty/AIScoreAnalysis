@@ -548,7 +548,7 @@ function generateSubjectSelection(scores) {
 }
 
 function StepIndicator({ currentStep }) {
-  const steps = ['录入方式', '确认成绩', 'AI基础分析', '增强分析']
+  const steps = ['录入方式', '确认成绩', 'AI基础分析', 'AI增强分析']
 
   return (
     <div className="flex items-center justify-center mb-3 overflow-x-auto pb-1">
@@ -781,8 +781,9 @@ function ScoreLineChart({ title, points, color = '#6366F1', height = 128, yLabel
   )
 }
 
-function TrendAnalysis({ history, city, grade }) {
+function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord }) {
   const [showSubjects, setShowSubjects] = useState(true)
+  const [editingRecord, setEditingRecord] = useState(null)
 
   if (history.length === 0) {
     return (
@@ -801,18 +802,69 @@ function TrendAnalysis({ history, city, grade }) {
   const scoreChange = latestScore - firstScore
   const scoreChangePercent = firstScore > 0 ? ((scoreChange / firstScore) * 100).toFixed(1) : 0
   const subjectColors = ['#6366F1', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6', '#F97316', '#64748B']
+  const openRecordEditor = (record) => {
+    setEditingRecord({
+      ...record,
+      scores: (record.scores || []).map(item => ({ ...item })),
+      totalScore: record.totalScore ?? '',
+      classRank: record.classRank ?? '',
+      gradeRank: record.gradeRank ?? ''
+    })
+  }
+
+  const updateEditingScore = (index, value) => {
+    setEditingRecord(prev => {
+      const nextScores = [...(prev?.scores || [])]
+      nextScores[index] = { ...nextScores[index], score: value }
+      const nextTotal = calculateTotalScore(nextScores)
+      return { ...prev, scores: nextScores, totalScore: nextTotal }
+    })
+  }
+
+  const saveEditingRecord = () => {
+    if (!editingRecord || !onUpdateRecord) return
+    const confirmed = window.confirm(`确认保存 ${getExamDate(editingRecord)} 的考试记录修改吗？`)
+    if (!confirmed) return
+    onUpdateRecord(editingRecord.id, {
+      ...editingRecord,
+      totalScore: toNumber(editingRecord.totalScore) || calculateTotalScore(editingRecord.scores || []),
+      classRank: toNumber(editingRecord.classRank),
+      gradeRank: toNumber(editingRecord.gradeRank),
+      scores: (editingRecord.scores || [])
+        .map(item => ({
+          ...item,
+          subject: normalizeSubject(item.subject),
+          score: toNumber(item.score)
+        }))
+        .filter(item => item.subject && item.score !== null && item.score > 0)
+    })
+    setEditingRecord(null)
+  }
+
+  const deleteEditingRecord = () => {
+    if (!editingRecord || !onDeleteRecord) return
+    const confirmed = window.confirm(`确认删除 ${getExamDate(editingRecord)} 的考试记录吗？删除后无法自动恢复。`)
+    if (!confirmed) return
+    onDeleteRecord(editingRecord.id)
+    setEditingRecord(null)
+  }
+
   const recordList = (
     <div className="pt-3 border-t border-gray-100">
       <p className="text-sm font-medium text-gray-700 mb-2">考试记录</p>
       <div className="space-y-2 max-h-40 overflow-y-auto">
         {recentHistory.map((h) => (
-          <div key={h.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+          <button
+            key={h.id || getExamDate(h)}
+            onClick={() => openRecordEditor(h)}
+            className="w-full flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2 text-left hover:bg-indigo-50"
+          >
             <span className="text-gray-500">{getExamDate(h)}</span>
             <span className="font-medium text-gray-700">{h.totalScore}分</span>
             <span className="text-gray-400">
               班{toNumber(h.classRank) || '-'} · 年{toNumber(h.gradeRank) || '-'}
             </span>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -891,6 +943,73 @@ function TrendAnalysis({ history, city, grade }) {
       {!showSubjects && (
         <div className="text-xs text-gray-400">
           点击“查看每科”可展开语文、数学、英语等每门学科的日期曲线。
+        </div>
+      )}
+
+      {editingRecord && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/45 px-3 py-6">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-4 shadow-2xl max-h-[86svh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <p className="text-base font-bold text-gray-800">修改考试记录</p>
+                <p className="text-xs text-gray-500 mt-1">{getExamDate(editingRecord)} · 点击保存前会二次确认</p>
+              </div>
+              <button onClick={() => setEditingRecord(null)} className="text-sm text-gray-400">关闭</button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">总分</label>
+                <input
+                  type="number"
+                  value={editingRecord.totalScore ?? ''}
+                  onChange={(event) => setEditingRecord(prev => ({ ...prev, totalScore: event.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">班级排名</label>
+                <input
+                  type="number"
+                  value={editingRecord.classRank ?? ''}
+                  onChange={(event) => setEditingRecord(prev => ({ ...prev, classRank: event.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">年级排名</label>
+                <input
+                  type="number"
+                  value={editingRecord.gradeRank ?? ''}
+                  onChange={(event) => setEditingRecord(prev => ({ ...prev, gradeRank: event.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {(editingRecord.scores || []).map((item, index) => (
+                <div key={`${item.subject}-${index}`} className="grid grid-cols-[88px_1fr] gap-2 items-center">
+                  <span className="text-sm text-gray-600">{item.subject}</span>
+                  <input
+                    type="number"
+                    value={item.score ?? ''}
+                    onChange={(event) => updateEditingScore(index, event.target.value)}
+                    className="rounded-lg border border-gray-200 px-2 py-2 text-sm text-center"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <button onClick={deleteEditingRecord} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-500">
+                删除记录
+              </button>
+              <button onClick={saveEditingRecord} className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white">
+                保存修改
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1268,7 +1387,7 @@ function mergeScoreRows(scores, maxScores) {
   }).filter(item => item.score !== '' || item.maxScore !== '' || subjectOrder.includes(item.subject))
 }
 
-function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxScoresChange, summary }) {
+function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxScoresChange, summary, fullScoreData = {} }) {
   const rows = mergeScoreRows(scores, maxScores)
 
   const updateRows = (nextRows) => {
@@ -1302,17 +1421,10 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
     updateRows(rows.filter((_, itemIndex) => itemIndex !== index))
   }
 
-  const handleClearAll = () => {
-    const confirmed = window.confirm('确认删除当前表格里所有已填写成绩吗？此操作不会自动恢复。')
-    if (!confirmed) return
-    onScoresChange([])
-    onMaxScoresChange([])
-  }
-
   const isAbnormalRow = (item) => {
     const score = toNumber(item.score)
-    const maxScore = toNumber(item.maxScore)
-    return score !== null && maxScore !== null && maxScore > 0 && score > maxScore
+    const fullScore = toNumber(fullScoreData[normalizeSubject(item.subject)])
+    return score !== null && fullScore !== null && fullScore > 0 && score > fullScore
   }
 
   return (
@@ -1336,7 +1448,7 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
 
       {rows.some(isAbnormalRow) && (
         <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600">
-          发现异常：个人成绩高于班级最高分，请重点核对标红科目。
+          发现异常：个人成绩超过该科满分，请重点核对标红科目。
         </div>
       )}
 
@@ -1388,14 +1500,6 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
         ))}
       </div>
 
-      {rows.some(item => item.score !== '' || item.maxScore !== '') && (
-        <button
-          onClick={handleClearAll}
-          className="mt-3 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-50"
-        >
-          删除全部已填成绩
-        </button>
-      )}
     </div>
   )
 }
@@ -1464,7 +1568,7 @@ function FreeAnalysisCard({ analysis }) {
     }
   })
   const comparisonData = Object.values(scoreMap).sort((a, b) => b.diff - a.diff)
-  const hasAbnormalScore = comparisonData.some(item => item.maxScore && item.score > item.maxScore)
+  const hasAbnormalScore = comparisonData.some(item => item.fullScore && item.score > item.fullScore)
 
   return (
     <div className="bg-white rounded-xl shadow-md p-4 border border-indigo-100">
@@ -1497,11 +1601,11 @@ function FreeAnalysisCard({ analysis }) {
         {/* Comparison Table */}
         <div>
           <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-            <TrendingUp size={16} className="text-accent" /> 各科成绩对比
+            <TrendingUp size={16} className="text-accent" /> 本次考试各科成绩对比
           </p>
           {hasAbnormalScore && (
             <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-600">
-              发现异常：个人成绩高于班级最高分，请回到成绩确认页核对标红科目。
+              发现异常：个人成绩超过该科满分，请回到成绩确认页核对标红科目。
             </div>
           )}
           <div className="bg-gray-50 rounded-xl p-3">
@@ -1517,8 +1621,8 @@ function FreeAnalysisCard({ analysis }) {
               </thead>
               <tbody>
                 {comparisonData.map((item, idx) => (
-                  <tr key={`${item.subject}-${idx}`} className={`border-b last:border-0 ${item.maxScore && item.score > item.maxScore ? 'border-red-100 bg-red-50 font-bold text-red-600' : 'border-gray-100'}`}>
-                    <td className={`py-1.5 px-1 font-medium ${item.maxScore && item.score > item.maxScore ? 'text-red-600' : 'text-gray-700'}`}>{item.subject}</td>
+                  <tr key={`${item.subject}-${idx}`} className={`border-b last:border-0 ${item.fullScore && item.score > item.fullScore ? 'border-red-100 bg-red-50 font-bold text-red-600' : 'border-gray-100'}`}>
+                    <td className={`py-1.5 px-1 font-medium ${item.fullScore && item.score > item.fullScore ? 'text-red-600' : 'text-gray-700'}`}>{item.subject}</td>
                     <td className="text-center py-1.5 px-1">{item.score}</td>
                     <td className="text-center py-1.5 px-1 text-accent">{item.maxScore || '-'}</td>
                     <td className={`text-center py-1.5 px-1 font-medium ${item.diff > 0 ? 'text-warning' : 'text-success'}`}>
@@ -2285,6 +2389,30 @@ export default function App() {
     saveUser(null)
   }
 
+  const handleUpdateHistoryRecord = (recordId, nextRecord) => {
+    if (!user) return
+    const userId = getUserId(user)
+    const nextHistory = getStoredRecords(userId).map(record => {
+      if (record.id !== recordId) return record
+      return {
+        ...record,
+        ...nextRecord,
+        id: record.id,
+        updatedAt: new Date().toISOString()
+      }
+    })
+    setStoredRecords(userId, nextHistory)
+    setHistory(getStoredRecords(userId))
+  }
+
+  const handleDeleteHistoryRecord = (recordId) => {
+    if (!user) return
+    const userId = getUserId(user)
+    const nextHistory = getStoredRecords(userId).filter(record => record.id !== recordId)
+    setStoredRecords(userId, nextHistory)
+    setHistory(getStoredRecords(userId))
+  }
+
   const handleImageSelect = (type, file) => {
     const preview = URL.createObjectURL(file)
 
@@ -2494,10 +2622,6 @@ export default function App() {
 
     const nextWarnings = []
     normalizedMyScores.forEach(item => {
-      const upperBound = item.fullScore && item.fullScore > 0 ? Math.max(item.fullScore, 100) + 5 : 160
-      if (item.score > upperBound) {
-        nextWarnings.push(`${item.subject} 分数 ${item.score} 超出正常范围，请再次确认`)
-      }
       if (item.score <= 20 && (!item.fullScore || item.fullScore >= 80)) {
         nextWarnings.push(`${item.subject} 分数 ${item.score} 很低，可能仍然混入了排名数字，请再次确认`)
       }
@@ -2602,7 +2726,7 @@ export default function App() {
     setMaxImage(defaultImageSlot())
     setScores([])
     setMaxScores([])
-    setMeta(defaultMeta)
+    setMeta(defaultMeta())
     setError(null)
     setWarnings([])
     setAnalysis(null)
@@ -2638,6 +2762,16 @@ export default function App() {
               </div>
 
               <ModeChoice mode={inputMode} onChange={handleInputModeChange} />
+
+              {user && (
+                <TrendAnalysis
+                  history={history}
+                  city={city}
+                  grade={grade}
+                  onUpdateRecord={handleUpdateHistoryRecord}
+                  onDeleteRecord={handleDeleteHistoryRecord}
+                />
+              )}
 
               {error && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
@@ -2717,6 +2851,7 @@ export default function App() {
                     maxScores={maxScores}
                     onScoresChange={setScores}
                     onMaxScoresChange={setMaxScores}
+                    fullScoreData={getFullScoreData(city, grade)}
                     summary="上排为自己成绩，下排为班级最高分（不填则不显示分差）"
                   />
 
@@ -2805,6 +2940,7 @@ export default function App() {
                 maxScores={maxScores}
                 onScoresChange={setScores}
                 onMaxScoresChange={setMaxScores}
+                fullScoreData={getFullScoreData(city, grade)}
                 summary="上排为自己成绩，下排为班级最高分（不填则不显示分差）"
               />
             </div>
@@ -2833,9 +2969,23 @@ export default function App() {
             )}
 
             <FreeAnalysisCard analysis={analysis} />
-            {user && <TrendAnalysis history={history} city={city} grade={grade} />}
+            {user && (
+              <TrendAnalysis
+                history={history}
+                city={city}
+                grade={grade}
+                onUpdateRecord={handleUpdateHistoryRecord}
+                onDeleteRecord={handleDeleteHistoryRecord}
+              />
+            )}
             <SubjectSelectionCard selection={analysis.subjectSelection} />
             <AnalysisEvidenceCard analysis={analysis} />
+            <button
+              onClick={() => setStep(1)}
+              className="w-full btn-secondary"
+            >
+              返回上一步
+            </button>
             </div>
 
             <div className="space-y-3 lg:max-h-[calc(100svh-150px)] lg:overflow-y-auto lg:pr-1">
