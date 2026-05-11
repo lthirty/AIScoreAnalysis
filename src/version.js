@@ -3,11 +3,20 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.8.1';
+export const VERSION = '1.8.2';
 export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-17';
+export const BUILD_NUMBER = '20260511-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.2',
+    date: '2026-05-11',
+    author: 'Codex',
+    changes: [
+      '修复UserLogin缺少LogIn图标导入导致页面白屏的问题',
+      '通过真实浏览器DevTools验证页面可渲染并可切换Rayna/Xulei模拟账号'
+    ]
+  },
   {
     version: '1.8.1',
     date: '2026-05-11',

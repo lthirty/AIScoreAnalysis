@@ -16,7 +16,8 @@ import {
   Zap,
   Crown,
   RefreshCw,
-  PencilLine
+  PencilLine,
+  LogIn
 } from 'lucide-react'
 import { VERSION, BUILD_DATE } from './version.js'
 
