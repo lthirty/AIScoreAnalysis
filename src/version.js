@@ -3,11 +3,21 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.8.3';
+export const VERSION = '1.8.4';
 export const BUILD_DATE = '2026-05-12';
-export const BUILD_NUMBER = '20260512-01';
+export const BUILD_NUMBER = '20260512-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.4',
+    date: '2026-05-12',
+    author: 'Codex',
+    changes: [
+      '各科趋势深度分析栏增加学科名称输入框',
+      '保持趋势深度分析栏默认展开',
+      '增加开始分析按钮和页面内校验状态提示'
+    ]
+  },
   {
     version: '1.8.3',
     date: '2026-05-12',

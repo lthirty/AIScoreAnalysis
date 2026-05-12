@@ -1866,8 +1866,10 @@ function PremiumAnalysisCard({ analysis }) {
 function TrendDetailNotice() {
   const [expanded, setExpanded] = useState(true)
   const [mode, setMode] = useState('upload')
+  const [subjectName, setSubjectName] = useState('')
   const [paperImage, setPaperImage] = useState(defaultImageSlot)
   const [paperDetail, setPaperDetail] = useState('')
+  const [analysisStatus, setAnalysisStatus] = useState('')
 
   const handlePaperSelect = (file) => {
     if (paperImage.preview) URL.revokeObjectURL(paperImage.preview)
@@ -1877,6 +1879,27 @@ function TrendDetailNotice() {
   const handlePaperRemove = () => {
     if (paperImage.preview) URL.revokeObjectURL(paperImage.preview)
     setPaperImage(defaultImageSlot())
+  }
+
+  const handleStartSubjectAnalysis = () => {
+    const subject = normalizeSubject(subjectName) || subjectName.trim()
+
+    if (!subject) {
+      setAnalysisStatus('请先填写要分析的学科名称。')
+      return
+    }
+
+    if (mode === 'upload' && !paperImage.file) {
+      setAnalysisStatus(`请先导入${subject}的试卷照片或切换为手动输入。`)
+      return
+    }
+
+    if (mode === 'manual' && !paperDetail.trim()) {
+      setAnalysisStatus(`请先输入${subject}各题型得分和丢分情况。`)
+      return
+    }
+
+    setAnalysisStatus(`已收到${subject}的${mode === 'upload' ? '试卷照片' : '题型得分'}，调试阶段暂不调用模型；后续将接入AI题型失分分析。`)
   }
 
   return (
@@ -1896,6 +1919,25 @@ function TrendDetailNotice() {
           <p>
             如果需要分析每门学科的真实变化原因，请导入各科试卷照片，或手动输入各科试卷里每个部分的分数和丢分情况，例如英语的选择题、填空题、判断题、作文题等。只有总分和学科总分时，系统只能判断分数曲线变化，不能准确定位题型短板。
           </p>
+          <div className="bg-gray-50 rounded-xl p-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">本次要分析的学科</label>
+            <input
+              list="subject-analysis-options"
+              type="text"
+              value={subjectName}
+              onChange={(event) => {
+                setSubjectName(event.target.value)
+                setAnalysisStatus('')
+              }}
+              placeholder="选择或输入学科，例如英语"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+            <datalist id="subject-analysis-options">
+              {SUBJECTS.map(subject => (
+                <option key={subject} value={subject} />
+              ))}
+            </datalist>
+          </div>
           <ModeChoice mode={mode} onChange={setMode} />
           {mode === 'upload' ? (
             <ImageUploadSlot
@@ -1918,6 +1960,18 @@ function TrendDetailNotice() {
               <p className="mt-2 text-xs text-gray-400">当前为调试入口，信息暂不提交；后续会接入增强分析模型。</p>
             </div>
           )}
+          {analysisStatus && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              {analysisStatus}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleStartSubjectAnalysis}
+            className="w-full rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 px-4 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-orange-900/10"
+          >
+            开始分析
+          </button>
         </div>
       )}
     </div>
