@@ -1754,7 +1754,7 @@ function FreeAnalysisCard({ analysis }) {
   )
 }
 
-function PremiumAnalysisCard({ analysis }) {
+function PremiumAnalysisCard({ analysis, onRunSubjectTrendAnalysis, onSubjectTrendAnalysisDone }) {
   if (!analysis?.deepAnalysis) return null
 
   const { deepAnalysis } = analysis
@@ -1857,22 +1857,29 @@ function PremiumAnalysisCard({ analysis }) {
           </>
         )}
 
-        <TrendDetailNotice />
+        <TrendDetailNotice
+          analysis={analysis}
+          onRunSubjectTrendAnalysis={onRunSubjectTrendAnalysis}
+          onSubjectTrendAnalysisDone={onSubjectTrendAnalysisDone}
+        />
       </div>
     </div>
   )
 }
 
-function TrendDetailNotice() {
+function TrendDetailNotice({ analysis, onRunSubjectTrendAnalysis, onSubjectTrendAnalysisDone }) {
   const [expanded, setExpanded] = useState(true)
   const [mode, setMode] = useState('upload')
   const [subjectName, setSubjectName] = useState('')
   const [paperImage, setPaperImage] = useState(defaultImageSlot)
   const [paperDetail, setPaperDetail] = useState('')
+  const [pendingEntries, setPendingEntries] = useState([])
   const [analysisStatus, setAnalysisStatus] = useState('')
+  const [analyzingSubject, setAnalyzingSubject] = useState(false)
 
   const handlePaperSelect = (file) => {
     if (paperImage.preview) URL.revokeObjectURL(paperImage.preview)
+    setAnalysisStatus('')
     setPaperImage({ file, preview: URL.createObjectURL(file) })
   }
 
@@ -1881,25 +1888,98 @@ function TrendDetailNotice() {
     setPaperImage(defaultImageSlot())
   }
 
-  const handleStartSubjectAnalysis = () => {
+  const buildCurrentEntry = () => {
     const subject = normalizeSubject(subjectName) || subjectName.trim()
 
     if (!subject) {
-      setAnalysisStatus('请先填写要分析的学科名称。')
-      return
+      return { error: '请先填写要分析的学科名称。' }
     }
 
     if (mode === 'upload' && !paperImage.file) {
-      setAnalysisStatus(`请先导入${subject}的试卷照片或切换为手动输入。`)
-      return
+      return { error: `请先导入${subject}的试卷照片或切换为手动输入。` }
     }
 
     if (mode === 'manual' && !paperDetail.trim()) {
-      setAnalysisStatus(`请先输入${subject}各题型得分和丢分情况。`)
+      return { error: `请先输入${subject}各题型得分和丢分情况。` }
+    }
+
+    return {
+      entry: {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        subject,
+        mode,
+        detail: mode === 'manual' ? paperDetail.trim() : '',
+        file: mode === 'upload' ? paperImage.file : null,
+        imageName: mode === 'upload' ? paperImage.file?.name || `${subject}试卷图片` : '',
+        preview: mode === 'upload' ? paperImage.preview : ''
+      }
+    }
+  }
+
+  const clearCurrentEntry = () => {
+    setSubjectName('')
+    setPaperDetail('')
+    setPaperImage(defaultImageSlot())
+  }
+
+  const handleAddSubjectEntry = () => {
+    const { entry, error } = buildCurrentEntry()
+    if (error) {
+      setAnalysisStatus(error)
       return
     }
 
-    setAnalysisStatus(`已收到${subject}的${mode === 'upload' ? '试卷照片' : '题型得分'}，调试阶段暂不调用模型；后续将接入AI题型失分分析。`)
+    setPendingEntries(prev => [...prev, entry])
+    clearCurrentEntry()
+    setAnalysisStatus(`已加入${entry.subject}，可以继续导入另一门学科，或点击“开始分析”统一分析。`)
+  }
+
+  const handleRemoveSubjectEntry = (entryId) => {
+    setPendingEntries(prev => {
+      const removed = prev.find(item => item.id === entryId)
+      if (removed?.preview) URL.revokeObjectURL(removed.preview)
+      return prev.filter(item => item.id !== entryId)
+    })
+  }
+
+  const handleStartSubjectAnalysis = async () => {
+    let entries = pendingEntries
+    const hasCurrentInput = subjectName.trim() || paperImage.file || paperDetail.trim()
+
+    if (hasCurrentInput) {
+      const { entry, error } = buildCurrentEntry()
+      if (error) {
+        setAnalysisStatus(error)
+        return
+      }
+      entries = [...pendingEntries, entry]
+      setPendingEntries(entries)
+      clearCurrentEntry()
+    }
+
+    if (entries.length === 0) {
+      setAnalysisStatus('请先至少加入一门学科后再开始分析。')
+      return
+    }
+
+    if (!onRunSubjectTrendAnalysis || !onSubjectTrendAnalysisDone) {
+      setAnalysisStatus('当前分析入口未接入模型调用，请稍后重试。')
+      return
+    }
+
+    setAnalyzingSubject(true)
+    setAnalysisStatus(`正在调用模型分析 ${entries.map(item => item.subject).join('、')}，请稍候...`)
+
+    try {
+      const report = await onRunSubjectTrendAnalysis(entries)
+      onSubjectTrendAnalysisDone(entries, report)
+      setAnalysisStatus(`已完成 ${entries.map(item => item.subject).join('、')} 的趋势深度分析。`)
+    } catch (error) {
+      console.error('Subject trend analysis error:', error)
+      setAnalysisStatus(error.message || '各科趋势深度分析调用失败，请稍后重试。')
+    } finally {
+      setAnalyzingSubject(false)
+    }
   }
 
   return (
@@ -1960,18 +2040,64 @@ function TrendDetailNotice() {
               <p className="mt-2 text-xs text-gray-400">当前为调试入口，信息暂不提交；后续会接入增强分析模型。</p>
             </div>
           )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleAddSubjectEntry}
+              className="w-full rounded-xl border border-amber-300 bg-white px-4 py-3 text-sm font-bold text-amber-700"
+            >
+              加入待分析学科
+            </button>
+            <button
+              type="button"
+              onClick={handleStartSubjectAnalysis}
+              disabled={analyzingSubject}
+              className="w-full rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 px-4 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-orange-900/10 disabled:opacity-60"
+            >
+              {analyzingSubject ? '分析中...' : '开始分析'}
+            </button>
+          </div>
+          {pendingEntries.length > 0 && (
+            <div className="rounded-xl bg-white p-3 border border-amber-100">
+              <p className="text-sm font-medium text-gray-700 mb-2">待分析学科</p>
+              <div className="space-y-2">
+                {pendingEntries.map(entry => (
+                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-xs">
+                    <span className="font-medium text-gray-700">
+                      {entry.subject} · {entry.mode === 'upload' ? entry.imageName : '手动输入题型得分'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSubjectEntry(entry.id)}
+                      className="text-red-500"
+                    >
+                      删除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {analysisStatus && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               {analysisStatus}
             </div>
           )}
-          <button
-            type="button"
-            onClick={handleStartSubjectAnalysis}
-            className="w-full rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 px-4 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-orange-900/10"
-          >
-            开始分析
-          </button>
+          {analysis?.subjectTrendAnalyses?.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-gray-800">各科趋势深度分析结果</p>
+              {analysis.subjectTrendAnalyses.map(item => (
+                <div key={item.id} className="rounded-xl bg-white p-3 shadow-sm border border-amber-100">
+                  <p className="text-xs font-semibold text-amber-700 mb-2">
+                    {item.subjects.join('、')} · {item.model || 'AI模型'}
+                  </p>
+                  <div className="text-sm text-gray-700 leading-6 whitespace-pre-line">
+                    {sanitizeAiReport(item.report)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2185,7 +2311,10 @@ function getAnalysisExportText(analysis) {
   if (!analysis) return ''
 
   const cleanAiReport = formatAiReportForDisplay(analysis.deepAnalysis?.aiReport)
-  if (cleanAiReport) return cleanAiReport
+  const subjectTrendText = getSubjectTrendExportText(analysis)
+  if (cleanAiReport) {
+    return [cleanAiReport, subjectTrendText].filter(Boolean).join('\n\n')
+  }
 
   const sections = [
     `AI成绩分析报告`,
@@ -2198,11 +2327,74 @@ function getAnalysisExportText(analysis) {
     '待提升科目',
     ...(analysis.weaknesses || []).map(item => `${item.subject}：${item.score}分，${item.maxScore ? `距最高分${item.diff}分` : '低于个人均分'}`),
     '',
+    subjectTrendText,
+    '',
     '学习建议',
     ...(analysis.suggestions || [])
   ]
 
   return sections.filter(item => item !== undefined && item !== null).join('\n')
+}
+
+function getSubjectTrendExportText(analysis) {
+  const records = analysis?.subjectTrendAnalyses || []
+  if (records.length === 0) return ''
+
+  return [
+    '各科趋势深度分析',
+    ...records.map(record => [
+      `学科：${record.subjects.join('、')}`,
+      `模型：${record.model || 'AI模型'}`,
+      sanitizeAiReport(record.report)
+    ].filter(Boolean).join('\n'))
+  ].join('\n\n')
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (event) => resolve(event.target.result.split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+function buildSubjectTrendAnalysisPrompt(entries, analysis, city, grade) {
+  const subjectText = entries.map((entry, index) => [
+    `${index + 1}、学科：${entry.subject}`,
+    `输入方式：${entry.mode === 'upload' ? '试卷/答题卡截图' : '手动题型得分'}`,
+    entry.detail ? `题型得分与丢分情况：${entry.detail}` : '',
+    entry.imageName ? `图片文件：${entry.imageName}` : ''
+  ].filter(Boolean).join('\n')).join('\n\n')
+  const scoreText = analysis?.allScores?.map(item => `${item.subject}:${item.score}`).join(', ') || '未提供'
+  const trendText = formatTrendForPrompt(analysis?.trendAnalysis)
+
+  return [
+    '你是资深学科试卷分析老师。请基于学生成绩、历史趋势，以及用户补充的试卷照片或题型得分，输出各科趋势深度分析。',
+    '',
+    '【学生信息】',
+    `城市：${city}`,
+    `年级：${grade}`,
+    `本次各科成绩：${scoreText}`,
+    '',
+    '【历史趋势】',
+    trendText,
+    '',
+    '【本次要分析的学科材料】',
+    subjectText,
+    '',
+    '【输出要求】',
+    '1、每个学科独立成段，先写学科名称。',
+    '2、如果用户提供了题型得分或试卷图片，可以分析具体题型短板；如果没有，不要编造题型失分原因。',
+    '3、要结合历史分数趋势、当前分数和用户补充材料，给出可执行建议。',
+    '4、不要使用 # 号标题。',
+    '',
+    '【报告格式】',
+    '1、学科趋势判断',
+    '2、题型/模块失分定位',
+    '3、下一阶段训练建议',
+    '4、下次考试目标'
+  ].join('\n')
 }
 
 function wrapCanvasText(context, text, maxWidth) {
@@ -2812,6 +3004,75 @@ export default function App() {
     return data.choices?.[0]?.message?.content || ''
   }
 
+  const runSubjectTrendAnalysis = async (entries) => {
+    const hasImage = entries.some(entry => entry.mode === 'upload' && entry.file)
+    const prompt = buildSubjectTrendAnalysisPrompt(entries, analysis, city, grade)
+    const content = hasImage ? [] : prompt
+
+    if (hasImage) {
+      for (const entry of entries) {
+        if (entry.mode === 'upload' && entry.file) {
+          const base64Image = await readFileAsBase64(entry.file)
+          content.push({
+            type: 'image_url',
+            image_url: { url: `data:${entry.file.type || 'image/png'};base64,${base64Image}` }
+          })
+        }
+      }
+      content.push({ type: 'text', text: prompt })
+    }
+
+    const response = await fetch(ANALYSIS_PROVIDER.endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${customKeys.aliyun?.trim() || ANALYSIS_PROVIDER.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: hasImage ? AI_PROVIDERS.aliyun.model : ANALYSIS_PROVIDER.model,
+        temperature: 0.2,
+        messages: [{
+          role: 'user',
+          content
+        }]
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(`各科趋势深度分析调用失败: ${errorData.error?.message || response.status}`)
+    }
+
+    const data = await response.json()
+    return data.choices?.[0]?.message?.content || ''
+  }
+
+  const handleSubjectTrendAnalysisDone = (entries, report) => {
+    const hasImage = entries.some(entry => entry.mode === 'upload' && entry.file)
+    const safeEntries = entries.map(entry => ({
+      subject: entry.subject,
+      mode: entry.mode,
+      detail: entry.detail,
+      imageName: entry.imageName
+    }))
+    const nextRecord = {
+      id: `subject-trend-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      subjects: safeEntries.map(entry => entry.subject),
+      entries: safeEntries,
+      model: hasImage ? `${AI_PROVIDERS.aliyun.name} ${AI_PROVIDERS.aliyun.model}` : `${ANALYSIS_PROVIDER.name} ${ANALYSIS_PROVIDER.model}`,
+      report
+    }
+
+    setAnalysis(prev => ({
+      ...prev,
+      subjectTrendAnalyses: [
+        ...(prev?.subjectTrendAnalyses || []),
+        nextRecord
+      ]
+    }))
+  }
+
   const handleRecognize = async () => {
     if (!city || !grade) {
       setError('请选择城市和年级')
@@ -3166,71 +3427,67 @@ export default function App() {
         )}
 
         {step === 1 && (
-          <div className="animate-fadeIn grid lg:grid-cols-[0.85fr_1.15fr] gap-3 min-h-0">
-            <div className="space-y-3">
-              <SummaryEditor meta={meta} onChange={handleMetaChange} />
+          <div className="animate-fadeIn space-y-3">
+            <SummaryEditor meta={meta} onChange={handleMetaChange} />
 
-              {warnings.length > 0 && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
-                  <div className="font-medium mb-2">识别提醒</div>
-                  <ul className="space-y-1">
-                    {warnings.map(item => (
-                      <li key={item}>• {item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
-                  <AlertCircle size={18} />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <div className="bg-white rounded-xl shadow-md p-3 border border-gray-100">
-                <p className="text-sm text-gray-600 leading-6">
-                  核对每科真实分数。班级排名和年级排名填在汇总区，不放进科目分数。
-                </p>
+            {warnings.length > 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+                <div className="font-medium mb-2">识别提醒</div>
+                <ul className="space-y-1">
+                  {warnings.map(item => (
+                    <li key={item}>• {item}</li>
+                  ))}
+                </ul>
               </div>
+            )}
 
-              <button
-                onClick={handleConfirmScores}
-                disabled={analyzing}
-                className="w-full btn-primary flex items-center justify-center gap-2"
-              >
-                {analyzing ? (
-                  <>
-                    <RefreshCw size={20} className="animate-spin" />
-                    <span>分析中...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={20} />
-                    <span>确认并分析</span>
-                  </>
-                )}
-              </button>
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
+                <AlertCircle size={18} />
+                <span>{error}</span>
+              </div>
+            )}
 
-              <button
-                onClick={() => setStep(0)}
-                className="w-full btn-secondary"
-              >
-                返回
-              </button>
+            <div className="bg-white rounded-xl shadow-md p-3 border border-gray-100">
+              <p className="text-sm text-gray-600 leading-6">
+                核对每科真实分数。班级排名和年级排名填在汇总区，不放进科目分数。确认无误后，点击下方按钮开始 AI 分析。
+              </p>
             </div>
 
-            <div className="space-y-3">
-              <CombinedScoreEditor
-                title="成绩确认"
-                scores={scores}
-                maxScores={maxScores}
-                onScoresChange={setScores}
-                onMaxScoresChange={setMaxScores}
-                fullScoreData={getFullScoreData(city, grade)}
-                summary="上排为自己成绩，下排为班级最高分（不填则不显示分差）"
-              />
-            </div>
+            <CombinedScoreEditor
+              title="成绩确认"
+              scores={scores}
+              maxScores={maxScores}
+              onScoresChange={setScores}
+              onMaxScoresChange={setMaxScores}
+              fullScoreData={getFullScoreData(city, grade)}
+              summary="上排为自己成绩，下排为班级最高分（不填则不显示分差）"
+            />
+
+            <button
+              onClick={handleConfirmScores}
+              disabled={analyzing}
+              className="w-full btn-primary flex items-center justify-center gap-2"
+            >
+              {analyzing ? (
+                <>
+                  <RefreshCw size={20} className="animate-spin" />
+                  <span>分析中...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={20} />
+                  <span>确认并分析</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => setStep(0)}
+              className="w-full btn-secondary"
+            >
+              返回
+            </button>
           </div>
         )}
 
@@ -3267,6 +3524,7 @@ export default function App() {
             )}
             <SubjectSelectionCard selection={analysis.subjectSelection} />
             <AnalysisEvidenceCard analysis={analysis} />
+            <EnhancedAnalysisCta analysis={analysis} onStart={goToEnhancedAnalysis} />
             <button
               onClick={() => setStep(1)}
               className="w-full btn-secondary"
@@ -3277,7 +3535,6 @@ export default function App() {
 
             <div className="space-y-3">
               <EducationDeptAppendix currentCity={city} />
-              <EnhancedAnalysisCta analysis={analysis} onStart={goToEnhancedAnalysis} />
             </div>
           </div>
         )}
@@ -3301,7 +3558,11 @@ export default function App() {
             </div>
 
             <div ref={premiumTopRef}>
-              <PremiumAnalysisCard analysis={analysis} />
+              <PremiumAnalysisCard
+                analysis={analysis}
+                onRunSubjectTrendAnalysis={runSubjectTrendAnalysis}
+                onSubjectTrendAnalysisDone={handleSubjectTrendAnalysisDone}
+              />
             </div>
           </div>
         )}

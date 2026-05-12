@@ -3,11 +3,22 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.8.4';
+export const VERSION = '1.8.5';
 export const BUILD_DATE = '2026-05-12';
-export const BUILD_NUMBER = '20260512-02';
+export const BUILD_NUMBER = '20260512-03';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.5',
+    date: '2026-05-12',
+    author: 'Codex',
+    changes: [
+      '确认成绩页改为成绩确认表在按钮上方，点击确认并分析后才开始分析',
+      'AI基础分析页将解锁AI增强分析入口移动到返回上一步按钮上方',
+      '各科趋势深度分析支持连续加入多门学科后统一调用模型分析',
+      '各科趋势深度分析结果在当前页面展示，并纳入图片/PDF/文本导出内容'
+    ]
+  },
   {
     version: '1.8.4',
     date: '2026-05-12',
