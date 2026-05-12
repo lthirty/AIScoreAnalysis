@@ -3,11 +3,27 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.8.2';
-export const BUILD_DATE = '2026-05-11';
-export const BUILD_NUMBER = '20260511-18';
+export const VERSION = '1.8.3';
+export const BUILD_DATE = '2026-05-12';
+export const BUILD_NUMBER = '20260512-01';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.3',
+    date: '2026-05-12',
+    author: 'Codex',
+    changes: [
+      '修复桌面最大化时页面高度锁死导致无法滚动的问题',
+      '首页改为AI服务商、历史趋势、录入成绩栏的顺序，并将城市、年级、日期、录入方式和录入内容合并到一个栏',
+      '历史趋势增加展开/收缩按钮且默认收缩',
+      '取消浏览器alert/confirm弹窗，改为页面内提示或二次点击确认',
+      '按模拟微信账号保存并恢复上次城市和年级',
+      '教育部门网址查询改为可下拉也可输入的单一输入栏，并放在AI增强分析入口上方默认展开',
+      'AI增强分析进入后自动定位到AI深度分析首行',
+      'AI各科分差分析要求并展示为每科独立段落',
+      'AI深度分析增加图片导出、PDF打印和手机转发文本入口'
+    ]
+  },
   {
     version: '1.8.2',
     date: '2026-05-11',

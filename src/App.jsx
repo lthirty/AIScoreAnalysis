@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   Upload,
   Camera,
@@ -17,7 +17,9 @@ import {
   Crown,
   RefreshCw,
   PencilLine,
-  LogIn
+  LogIn,
+  Download,
+  Printer
 } from 'lucide-react'
 import { VERSION, BUILD_DATE } from './version.js'
 
@@ -96,7 +98,8 @@ const ANALYSIS_PROVIDER = {
 
 const STORAGE_KEYS = {
   user: 'AIScoreAnalysis:user',
-  records: 'AIScoreAnalysis:examRecords'
+  records: 'AIScoreAnalysis:examRecords',
+  preferences: 'AIScoreAnalysis:userPreferences'
 }
 
 const MOCK_WECHAT_USERS = {
@@ -235,6 +238,31 @@ function setStoredRecords(userId, records) {
   const allRecords = readJsonStorage(STORAGE_KEYS.records, {})
   allRecords[userId] = sortExamRecords(records).slice(0, 30)
   writeJsonStorage(STORAGE_KEYS.records, allRecords)
+}
+
+function getStoredUserPreferences(userId) {
+  if (!userId) return {}
+
+  const allPreferences = readJsonStorage(STORAGE_KEYS.preferences, {})
+  return allPreferences[userId] || {}
+}
+
+function setStoredUserPreferences(userId, preferences) {
+  if (!userId) return
+
+  const allPreferences = readJsonStorage(STORAGE_KEYS.preferences, {})
+  allPreferences[userId] = {
+    ...(allPreferences[userId] || {}),
+    ...preferences,
+    updatedAt: new Date().toISOString()
+  }
+  writeJsonStorage(STORAGE_KEYS.preferences, allPreferences)
+}
+
+function getInitialUserPreference(key, fallback) {
+  const storedUser = getStoredUser()
+  const preferences = getStoredUserPreferences(getUserId(storedUser))
+  return preferences[key] || fallback
 }
 
 function createMockWechatUser(userKey) {
@@ -783,14 +811,22 @@ function ScoreLineChart({ title, points, color = '#6366F1', height = 128, yLabel
 }
 
 function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord }) {
-  const [showSubjects, setShowSubjects] = useState(true)
+  const [expanded, setExpanded] = useState(false)
+  const [showSubjects, setShowSubjects] = useState(false)
   const [editingRecord, setEditingRecord] = useState(null)
+  const [pendingAction, setPendingAction] = useState('')
 
   if (history.length === 0) {
     return (
-      <div className="bg-gray-50 rounded-xl p-4 text-center">
-        <p className="text-sm text-gray-500">暂无历史成绩记录</p>
-        <p className="text-xs text-gray-400 mt-1">完成至少一次分析后自动保存</p>
+      <div className="bg-white rounded-xl shadow-md p-4 border border-indigo-100">
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp size={18} className="text-primary" />
+          <h3 className="font-semibold text-gray-800">历史趋势</h3>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-4 text-center">
+          <p className="text-sm text-gray-500">暂无历史成绩记录</p>
+          <p className="text-xs text-gray-400 mt-1">完成至少一次分析后自动保存</p>
+        </div>
       </div>
     )
   }
@@ -811,6 +847,7 @@ function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord })
       classRank: record.classRank ?? '',
       gradeRank: record.gradeRank ?? ''
     })
+    setPendingAction('')
   }
 
   const updateEditingScore = (index, value) => {
@@ -824,8 +861,10 @@ function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord })
 
   const saveEditingRecord = () => {
     if (!editingRecord || !onUpdateRecord) return
-    const confirmed = window.confirm(`确认保存 ${getExamDate(editingRecord)} 的考试记录修改吗？`)
-    if (!confirmed) return
+    if (pendingAction !== 'save') {
+      setPendingAction('save')
+      return
+    }
     onUpdateRecord(editingRecord.id, {
       ...editingRecord,
       totalScore: toNumber(editingRecord.totalScore) || calculateTotalScore(editingRecord.scores || []),
@@ -840,14 +879,18 @@ function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord })
         .filter(item => item.subject && item.score !== null && item.score > 0)
     })
     setEditingRecord(null)
+    setPendingAction('')
   }
 
   const deleteEditingRecord = () => {
     if (!editingRecord || !onDeleteRecord) return
-    const confirmed = window.confirm(`确认删除 ${getExamDate(editingRecord)} 的考试记录吗？删除后无法自动恢复。`)
-    if (!confirmed) return
+    if (pendingAction !== 'delete') {
+      setPendingAction('delete')
+      return
+    }
     onDeleteRecord(editingRecord.id)
     setEditingRecord(null)
+    setPendingAction('')
   }
 
   const recordList = (
@@ -873,17 +916,30 @@ function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord })
 
   return (
     <div className="bg-white rounded-xl shadow-md p-4 border border-indigo-100">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-2">
           <TrendingUp size={18} className="text-primary" />
           <h3 className="font-semibold text-gray-800">历史趋势</h3>
         </div>
-        <button
-          onClick={() => setShowSubjects(!showSubjects)}
-          className="text-xs text-primary hover:text-indigo-600"
-        >
-          {showSubjects ? '收起科目' : '查看每科'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="text-xs text-primary hover:text-indigo-600"
+          >
+            {expanded ? '历史趋势收缩' : '历史趋势展开'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setExpanded(true)
+              setShowSubjects(!showSubjects)
+            }}
+            className="text-xs text-primary hover:text-indigo-600"
+          >
+            {showSubjects ? '收起科目' : '查看每科'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-4">
@@ -903,13 +959,17 @@ function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord })
         </div>
       </div>
 
-      <div className="mb-4">
-        <ScoreLineChart title="总分趋势" points={trendDataset.total.points} color="#6366F1" height={160} showRanks />
-      </div>
+      {expanded && (
+        <>
+          <div className="mb-4">
+            <ScoreLineChart title="总分趋势" points={trendDataset.total.points} color="#6366F1" height={160} showRanks />
+          </div>
 
-      {recordList}
+          {recordList}
+        </>
+      )}
 
-      {showSubjects && (
+      {expanded && showSubjects && (
         <div className="space-y-4 pt-4 mt-4 border-t border-gray-100">
           <div>
             <p className="text-sm font-medium text-gray-700">各科成绩曲线</p>
@@ -941,10 +1001,15 @@ function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord })
         </div>
       )}
 
-      {!showSubjects && (
+      {expanded && !showSubjects && (
         <div className="text-xs text-gray-400">
           点击“查看每科”可展开语文、数学、英语等每门学科的日期曲线。
         </div>
+      )}
+      {!expanded && (
+        <p className="text-xs text-gray-400">
+          当前已收缩趋势详情，点击“历史趋势展开”查看总分曲线、考试记录和各科曲线。
+        </p>
       )}
 
       {editingRecord && (
@@ -953,9 +1018,9 @@ function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord })
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <p className="text-base font-bold text-gray-800">修改考试记录</p>
-                <p className="text-xs text-gray-500 mt-1">{getExamDate(editingRecord)} · 点击保存前会二次确认</p>
-              </div>
-              <button onClick={() => setEditingRecord(null)} className="text-sm text-gray-400">关闭</button>
+              <p className="text-xs text-gray-500 mt-1">{getExamDate(editingRecord)} · 保存或删除需连续点击两次确认</p>
+            </div>
+              <button type="button" onClick={() => setEditingRecord(null)} className="text-sm text-gray-400">关闭</button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 mb-3">
@@ -1003,11 +1068,11 @@ function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord })
             </div>
 
             <div className="grid grid-cols-2 gap-2 mt-4">
-              <button onClick={deleteEditingRecord} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-500">
-                删除记录
+              <button type="button" onClick={deleteEditingRecord} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-500">
+                {pendingAction === 'delete' ? '再次点击确认删除' : '删除记录'}
               </button>
-              <button onClick={saveEditingRecord} className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white">
-                保存修改
+              <button type="button" onClick={saveEditingRecord} className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white">
+                {pendingAction === 'save' ? '再次点击确认保存' : '保存修改'}
               </button>
             </div>
           </div>
@@ -1390,6 +1455,7 @@ function mergeScoreRows(scores, maxScores) {
 
 function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxScoresChange, summary, fullScoreData = {} }) {
   const rows = mergeScoreRows(scores, maxScores)
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState(null)
 
   const updateRows = (nextRows) => {
     onScoresChange(nextRows
@@ -1402,12 +1468,8 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
 
   const handleChange = (index, field, value) => {
     const nextRows = [...rows]
-    const previous = nextRows[index]?.[field] ?? ''
-    if (previous !== '' && previous !== value) {
-      const confirmed = window.confirm(`确认把${nextRows[index]?.subject || '该科'}的${field === 'subject' ? '科目' : field === 'score' ? '我的成绩' : '班级最高分'}从“${previous}”修改为“${value}”吗？`)
-      if (!confirmed) return
-    }
     nextRows[index] = { ...nextRows[index], [field]: value }
+    setPendingDeleteIndex(null)
     updateRows(nextRows)
   }
 
@@ -1416,10 +1478,12 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
   }
 
   const handleDelete = (index) => {
-    const item = rows[index]
-    const confirmed = window.confirm(`确认删除${item?.subject || '该行'}成绩吗？删除后需要重新填写。`)
-    if (!confirmed) return
+    if (pendingDeleteIndex !== index) {
+      setPendingDeleteIndex(index)
+      return
+    }
     updateRows(rows.filter((_, itemIndex) => itemIndex !== index))
+    setPendingDeleteIndex(null)
   }
 
   const isAbnormalRow = (item) => {
@@ -1492,8 +1556,10 @@ function CombinedScoreEditor({ title, scores, maxScores, onScoresChange, onMaxSc
               className="px-2 py-1.5 text-sm border border-gray-200 rounded-lg text-center"
             />
             <button
+              type="button"
               onClick={() => handleDelete(index)}
-              className="p-1 text-gray-400 hover:text-red-500"
+              className={`p-1 ${pendingDeleteIndex === index ? 'text-red-500 font-bold' : 'text-gray-400 hover:text-red-500'}`}
+              title={pendingDeleteIndex === index ? '再次点击确认删除' : '删除'}
             >
               <Trash2 size={14} />
             </button>
@@ -1692,19 +1758,47 @@ function PremiumAnalysisCard({ analysis }) {
   if (!analysis?.deepAnalysis) return null
 
   const { deepAnalysis } = analysis
-  const cleanAiReport = sanitizeAiReport(deepAnalysis.aiReport)
+  const cleanAiReport = formatAiReportForDisplay(deepAnalysis.aiReport)
 
   return (
     <div className="card bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-10 h-10 bg-warning/10 rounded-full flex items-center justify-center">
-          <Crown className="text-warning" size={20} />
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 bg-warning/10 rounded-full flex items-center justify-center">
+            <Crown className="text-warning" size={20} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-800">AI 深度分析</h3>
+            <p className="text-xs text-gray-500">专业诊断与建议</p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-semibold text-gray-800">AI 深度分析</h3>
-          <p className="text-xs text-gray-500">专业诊断与建议</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => downloadAnalysisAsImage(analysis)}
+            className="rounded-lg bg-white px-3 py-2 font-semibold text-amber-700 shadow-sm flex items-center justify-center gap-1"
+          >
+            <Download size={14} /> 图片
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-lg bg-white px-3 py-2 font-semibold text-amber-700 shadow-sm flex items-center justify-center gap-1"
+          >
+            <Printer size={14} /> PDF
+          </button>
+          <button
+            type="button"
+            onClick={() => shareAnalysisText(analysis)}
+            className="rounded-lg bg-white px-3 py-2 font-semibold text-amber-700 shadow-sm col-span-2 sm:col-span-1"
+          >
+            转发文本
+          </button>
         </div>
       </div>
+      <p className="mb-4 text-xs text-amber-700">
+        付费用户可导出图片或打印保存为 PDF；手机端可保存后通过微信转发给指定联系人。浏览器网页不能直接指定微信号发送，需用户在微信内确认转发。
+      </p>
 
       <div className="space-y-4">
         {cleanAiReport ? (
@@ -1908,53 +2002,46 @@ function AnalysisEvidenceCard({ analysis }) {
 }
 
 function EducationDeptAppendix({ currentCity }) {
-  const [selectedCity, setSelectedCity] = useState(currentCity || '杭州')
-  const [customCity, setCustomCity] = useState('')
-  const effectiveCity = customCity.trim() || selectedCity
+  const [cityQuery, setCityQuery] = useState(currentCity || '杭州')
+  const effectiveCity = cityQuery.trim() || currentCity || '杭州'
   const url = EDUCATION_DEPT_LINKS[effectiveCity]
   const searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(`${effectiveCity} 教育局 官方网站`)}`
 
+  useEffect(() => {
+    setCityQuery(currentCity || '杭州')
+  }, [currentCity])
+
   return (
     <div className="bg-white rounded-xl shadow-md p-4 border border-slate-100">
-      <details>
-        <summary className="cursor-pointer text-sm font-semibold text-gray-800">
-          附录：当地教育部门网址查询
-        </summary>
-        <div className="mt-3 space-y-3">
-          <p className="text-xs text-gray-500 leading-5">
-            可查看当地教育部门公开信息，了解考试政策、招生安排、学业要求等。不同城市政策会变化，最终以官方发布为准。
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <select
-              value={selectedCity}
-              onChange={(event) => {
-                setSelectedCity(event.target.value)
-                setCustomCity('')
-              }}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white"
-            >
-              {Object.keys(EDUCATION_DEPT_LINKS).map(cityName => (
-                <option key={cityName} value={cityName}>{cityName}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={customCity}
-              onChange={(event) => setCustomCity(event.target.value)}
-              placeholder="或直接填写城市"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
-            />
-          </div>
-          <a
-            href={url || searchUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="block w-full rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-medium text-white"
-          >
-            {url ? `打开${effectiveCity}教育部门官网` : `搜索${effectiveCity}教育部门官网`}
-          </a>
+      <p className="text-sm font-semibold text-gray-800">附录：当地教育部门网址查询</p>
+      <div className="mt-3 space-y-3">
+        <p className="text-xs text-gray-500 leading-5">
+          可查看当地教育部门公开信息，了解考试政策、招生安排、学业要求等。不同城市政策会变化，最终以官方发布为准。
+        </p>
+        <div>
+          <input
+            list="education-city-options"
+            type="text"
+            value={cityQuery}
+            onChange={(event) => setCityQuery(event.target.value)}
+            placeholder="选择或输入城市"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white"
+          />
+          <datalist id="education-city-options">
+            {Object.keys(EDUCATION_DEPT_LINKS).map(cityName => (
+              <option key={cityName} value={cityName} />
+            ))}
+          </datalist>
         </div>
-      </details>
+        <a
+          href={url || searchUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="block w-full rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-medium text-white"
+        >
+          {url ? `打开${effectiveCity}教育部门官网` : `搜索${effectiveCity}教育部门官网`}
+        </a>
+      </div>
     </div>
   )
 }
@@ -2019,6 +2106,124 @@ function sanitizeAiReport(report) {
     .map(line => line.replace(/^\s{0,3}#{1,6}\s*/, ''))
     .join('\n')
     .trim()
+}
+
+function formatAiReportForDisplay(report) {
+  const cleanReport = sanitizeAiReport(report)
+  if (!cleanReport) return ''
+
+  const subjectPattern = SUBJECTS.join('|')
+  return cleanReport.replace(
+    /(2、各科分差分析\s*\n?)([\s\S]*?)(?=\n\s*3、|$)/,
+    (_, heading, body) => {
+      const formattedBody = body
+        .trim()
+        .replace(new RegExp(`\\s*(?=(${subjectPattern})[：:])`, 'g'), '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+
+      return `${heading}${formattedBody ? `${formattedBody}\n` : ''}`
+    }
+  )
+}
+
+function getAnalysisExportText(analysis) {
+  if (!analysis) return ''
+
+  const cleanAiReport = formatAiReportForDisplay(analysis.deepAnalysis?.aiReport)
+  if (cleanAiReport) return cleanAiReport
+
+  const sections = [
+    `AI成绩分析报告`,
+    `个人总分：${analysis.totalScore}，平均分：${analysis.average?.toFixed?.(1) || '-'}`,
+    `排名：班级第${analysis.classRank || '-'}，年级第${analysis.gradeRank || '-'}`,
+    '',
+    '优势科目',
+    ...(analysis.strengths || []).map(item => `${item.subject}：${item.score}分，${item.maxScore ? `距最高分${item.diff}分` : '高于个人均分'}`),
+    '',
+    '待提升科目',
+    ...(analysis.weaknesses || []).map(item => `${item.subject}：${item.score}分，${item.maxScore ? `距最高分${item.diff}分` : '低于个人均分'}`),
+    '',
+    '学习建议',
+    ...(analysis.suggestions || [])
+  ]
+
+  return sections.filter(item => item !== undefined && item !== null).join('\n')
+}
+
+function wrapCanvasText(context, text, maxWidth) {
+  const lines = []
+  text.split('\n').forEach(paragraph => {
+    if (!paragraph.trim()) {
+      lines.push('')
+      return
+    }
+
+    let line = ''
+    Array.from(paragraph).forEach(char => {
+      const nextLine = `${line}${char}`
+      if (context.measureText(nextLine).width > maxWidth && line) {
+        lines.push(line)
+        line = char
+      } else {
+        line = nextLine
+      }
+    })
+    lines.push(line)
+  })
+  return lines
+}
+
+function downloadAnalysisAsImage(analysis) {
+  const text = getAnalysisExportText(analysis)
+  if (!text) return
+
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d')
+  const width = 1080
+  const padding = 64
+  context.font = '30px Microsoft YaHei, PingFang SC, sans-serif'
+  const lines = wrapCanvasText(context, text, width - padding * 2)
+  const lineHeight = 48
+  const height = Math.max(720, padding * 2 + lines.length * lineHeight)
+
+  canvas.width = width
+  canvas.height = height
+  context.fillStyle = '#FFFFFF'
+  context.fillRect(0, 0, width, height)
+  context.fillStyle = '#111827'
+  context.font = '30px Microsoft YaHei, PingFang SC, sans-serif'
+  context.textBaseline = 'top'
+
+  lines.forEach((line, index) => {
+    context.fillText(line, padding, padding + index * lineHeight)
+  })
+
+  const link = document.createElement('a')
+  link.download = `AI成绩分析-${new Date().toISOString().slice(0, 10)}.png`
+  link.href = canvas.toDataURL('image/png')
+  link.click()
+}
+
+async function shareAnalysisText(analysis) {
+  const text = getAnalysisExportText(analysis)
+  if (!text) return
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: 'AI成绩分析报告',
+        text
+      })
+      return
+    }
+
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text)
+    }
+  } catch (error) {
+    console.warn('Share analysis failed:', error)
+  }
 }
 
 function buildOcrPrompt(type) {
@@ -2108,6 +2313,7 @@ function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSe
     '7、判断趋势时必须看完整分数序列，包括连续上升/下降次数、波动幅度和最大单次下滑，不能只比较第一次和最后一次',
     '8、没有看到试卷照片、题型得分或每部分丢分数据时，绝不能编造“阅读理解、作文、选择题、填空题”等具体失分原因',
     '9、如果缺少题型/小题数据，只能说明目前只能基于总分、各科分数、最高分和历史曲线判断；要提示客户导入各科试卷照片，或输入各科试卷里每个部分的分数和丢分情况，例如英语的选择题、填空题、判断题、作文题等',
+    '10、在“2、各科分差分析”中，每个科目必须独立换行成一段，格式为“语文：……”。不要把多个科目写在同一段里',
     '',
     '【报告正文】（请严格按以下格式输出，每项200字以内；标题不要带 #）',
     '',
@@ -2115,7 +2321,7 @@ function buildDeepAnalysisPrompt(scores, maxScores, meta, city, grade, subjectSe
     '[一句话总结整体表现，定位所在分数段水平]',
     '',
     '2、各科分差分析',
-    '[只能逐科分析与班级最高分/满分的分差和历史曲线表现。不要推断具体题型失分；如需定位失分原因，请提示客户导入各科试卷照片，或输入每个部分的得分和丢分情况，例如英语选择题、填空题、判断题、作文题等]',
+    '[每个科目单独换行成一段；只能逐科分析与班级最高分/满分的分差和历史曲线表现。不要推断具体题型失分；如需定位失分原因，请提示客户导入各科试卷照片，或输入每个部分的得分和丢分情况，例如英语选择题、填空题、判断题、作文题等]',
     '',
     '3、选科建议（高中生必填）',
     '[推荐组合及理由，或说明维持现状的原因]',
@@ -2359,8 +2565,8 @@ export default function App() {
   const [scores, setScores] = useState([])
   const [maxScores, setMaxScores] = useState([])
   const [meta, setMeta] = useState(defaultMeta)
-  const [city, setCity] = useState('杭州')
-  const [grade, setGrade] = useState('高一')
+  const [city, setCity] = useState(() => getInitialUserPreference('city', '杭州'))
+  const [grade, setGrade] = useState(() => getInitialUserPreference('grade', '高一'))
   const [examDate, setExamDate] = useState(new Date().toISOString().split('T')[0])
   const [error, setError] = useState(null)
   const [warnings, setWarnings] = useState([])
@@ -2377,13 +2583,22 @@ export default function App() {
     const storedUser = getStoredUser()
     return storedUser ? getStoredRecords(getUserId(storedUser)) : []
   })
+  const premiumTopRef = useRef(null)
+
+  useEffect(() => {
+    if (!user || !city || !grade) return
+    setStoredUserPreferences(getUserId(user), { city, grade })
+  }, [user, city, grade])
 
   const handleLogin = (userData) => {
     const nextUser = normalizeUser(userData)
     if (!nextUser) return
 
+    const preferences = getStoredUserPreferences(getUserId(nextUser))
     setUser(nextUser)
     saveUser(nextUser)
+    setCity(preferences.city || '杭州')
+    setGrade(preferences.grade || '高一')
     setHistory(getStoredRecords(getUserId(nextUser)))
   }
 
@@ -2391,6 +2606,13 @@ export default function App() {
     setUser(null)
     setHistory([])
     saveUser(null)
+  }
+
+  const goToEnhancedAnalysis = () => {
+    setStep(3)
+    window.setTimeout(() => {
+      premiumTopRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }, 0)
   }
 
   const handleUpdateHistoryRecord = (recordId, nextRecord) => {
@@ -2538,11 +2760,11 @@ export default function App() {
 
   const handleRecognize = async () => {
     if (!city || !grade) {
-      alert('请选择城市和年级')
+      setError('请选择城市和年级')
       return
     }
     if (!myImage.file) {
-      alert('请上传成绩截图')
+      setError('请上传成绩截图')
       return
     }
 
@@ -2694,7 +2916,7 @@ export default function App() {
 
   const handleManualInput = () => {
     if (!city || !grade) {
-      alert('请选择城市和年级')
+      setError('请选择城市和年级')
       return
     }
 
@@ -2739,8 +2961,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen lg:h-[100svh] py-3 px-3 bg-gradient-to-b from-indigo-50/50 to-white lg:overflow-hidden">
-      <div className="max-w-5xl mx-auto h-full flex flex-col">
+    <div className="min-h-screen py-3 px-3 bg-gradient-to-b from-indigo-50/50 to-white">
+      <div className="max-w-5xl mx-auto">
         <AIAnalysisBanner />
 
         <div className="mb-3">
@@ -2750,14 +2972,29 @@ export default function App() {
         <StepIndicator currentStep={step} />
 
         {step === 0 && (
-          <div className="animate-fadeIn grid lg:grid-cols-[1fr_1.05fr] gap-3 min-h-0">
-            <div className="space-y-3">
-              <AIProviderSelector
-                value={aiProvider}
-                onChange={setAiProvider}
-                customKeys={customKeys}
-                onCustomKeyChange={handleCustomKeyChange}
+          <div className="animate-fadeIn space-y-3">
+            <AIProviderSelector
+              value={aiProvider}
+              onChange={setAiProvider}
+              customKeys={customKeys}
+              onCustomKeyChange={handleCustomKeyChange}
+            />
+
+            {user && (
+              <TrendAnalysis
+                history={history}
+                city={city}
+                grade={grade}
+                onUpdateRecord={handleUpdateHistoryRecord}
+                onDeleteRecord={handleDeleteHistoryRecord}
               />
+            )}
+
+            <div className="bg-white rounded-2xl shadow-md p-4 border border-indigo-100 space-y-4">
+              <div>
+                <p className="text-base font-semibold text-gray-800">录入成绩</p>
+                <p className="text-xs text-gray-500 mt-1">选择城市、年级和考试日期后，可导入截图或在本栏手动输入。</p>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <CitySelector value={city} onChange={setCity} />
@@ -2767,44 +3004,34 @@ export default function App() {
 
               <ModeChoice mode={inputMode} onChange={handleInputModeChange} />
 
-              {user && (
-                <TrendAnalysis
-                  history={history}
-                  city={city}
-                  grade={grade}
-                  onUpdateRecord={handleUpdateHistoryRecord}
-                  onDeleteRecord={handleDeleteHistoryRecord}
-                />
-              )}
-
               {error && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
                   <AlertCircle size={18} />
                   <span>{error}</span>
                 </div>
               )}
-            </div>
 
-            <div className="space-y-3">
               {inputMode === 'upload' ? (
-                <>
-                  <ImageUploadSlot
-                    title="成绩截图"
-                    description="导入学生成绩截图，系统会识别各科分数、总分和排名。"
-                    slot={myImage}
-                    onSelect={(file) => handleImageSelect('my', file)}
-                    onRemove={() => handleImageRemove('my')}
-                    disabled={uploading}
-                  />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <ImageUploadSlot
+                      title="成绩截图"
+                      description="导入学生成绩截图，系统会识别各科分数、总分和排名。"
+                      slot={myImage}
+                      onSelect={(file) => handleImageSelect('my', file)}
+                      onRemove={() => handleImageRemove('my')}
+                      disabled={uploading}
+                    />
 
-                  <ImageUploadSlot
-                    title="最高分截图（可选）"
-                    description="有班级/年级最高分截图时导入，可提升对比分析质量。"
-                    slot={maxImage}
-                    onSelect={(file) => handleImageSelect('max', file)}
-                    onRemove={() => handleImageRemove('max')}
-                    disabled={uploading}
-                  />
+                    <ImageUploadSlot
+                      title="最高分截图（可选）"
+                      description="有班级/年级最高分截图时导入，可提升对比分析质量。"
+                      slot={maxImage}
+                      onSelect={(file) => handleImageSelect('max', file)}
+                      onRemove={() => handleImageRemove('max')}
+                      disabled={uploading}
+                    />
+                  </div>
 
                   {uploading && (
                     <div className="bg-white rounded-xl shadow-md p-3 border border-gray-100">
@@ -2819,6 +3046,7 @@ export default function App() {
                   )}
 
                   <button
+                    type="button"
                     onClick={handleRecognize}
                     disabled={!myImage.file || uploading}
                     className="w-full btn-primary flex items-center justify-center gap-2"
@@ -2835,9 +3063,9 @@ export default function App() {
                       </>
                     )}
                   </button>
-                </>
+                </div>
               ) : (
-                <div className="bg-white rounded-xl shadow-md p-4 border border-gray-100 space-y-3">
+                <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                       <PencilLine size={22} className="text-primary" />
@@ -2860,6 +3088,7 @@ export default function App() {
                   />
 
                   <button
+                    type="button"
                     onClick={handleConfirmScores}
                     disabled={analyzing}
                     className="w-full btn-primary flex items-center justify-center gap-2"
@@ -2937,7 +3166,7 @@ export default function App() {
               </button>
             </div>
 
-            <div className="space-y-3 lg:max-h-[calc(100svh-150px)] lg:overflow-y-auto lg:pr-1">
+            <div className="space-y-3">
               <CombinedScoreEditor
                 title="成绩确认"
                 scores={scores}
@@ -2952,7 +3181,7 @@ export default function App() {
         )}
 
         {step === 2 && analysis && (
-          <div className="animate-slideUp grid lg:grid-cols-[0.95fr_1.05fr] gap-3 min-h-0">
+          <div className="animate-slideUp grid lg:grid-cols-[0.95fr_1.05fr] gap-3">
             <div className="space-y-3">
               <div className="text-center bg-white rounded-xl shadow-md p-3 border border-gray-100">
                 <p className="text-sm text-gray-500 mb-1">AI基础分析完成</p>
@@ -2992,21 +3221,15 @@ export default function App() {
             </button>
             </div>
 
-            <div className="space-y-3 lg:max-h-[calc(100svh-150px)] lg:overflow-y-auto lg:pr-1">
-              <EnhancedAnalysisCta analysis={analysis} onStart={() => setStep(3)} />
+            <div className="space-y-3">
               <EducationDeptAppendix currentCity={city} />
-              <button
-                onClick={handleReset}
-                className="w-full btn-secondary"
-              >
-                重新录入成绩
-              </button>
+              <EnhancedAnalysisCta analysis={analysis} onStart={goToEnhancedAnalysis} />
             </div>
           </div>
         )}
 
         {step === 3 && analysis && (
-          <div className="animate-slideUp grid lg:grid-cols-[0.85fr_1.15fr] gap-3 min-h-0">
+          <div className="animate-slideUp grid lg:grid-cols-[0.85fr_1.15fr] gap-3">
             <div className="space-y-3">
               <div className="text-center bg-white rounded-xl shadow-md p-3 border border-amber-100">
                 <p className="text-sm font-semibold text-amber-600 mb-1">AI增强分析</p>
@@ -3023,7 +3246,7 @@ export default function App() {
               </button>
             </div>
 
-            <div className="lg:max-h-[calc(100svh-150px)] lg:overflow-y-auto lg:pr-1">
+            <div ref={premiumTopRef}>
               <PremiumAnalysisCard analysis={analysis} />
             </div>
           </div>
