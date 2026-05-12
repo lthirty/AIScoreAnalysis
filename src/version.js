@@ -3,11 +3,23 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.8.6';
+export const VERSION = '1.8.7';
 export const BUILD_DATE = '2026-05-12';
-export const BUILD_NUMBER = '20260512-04';
+export const BUILD_NUMBER = '20260512-05';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.7',
+    date: '2026-05-12',
+    author: 'Codex',
+    changes: [
+      '统一所有返回按钮文案为返回上一步，并将分析页返回按钮放到页面内容最后',
+      'AI基础分析页历史趋势默认展开总分趋势、考试记录和各科成绩曲线',
+      '各科趋势深度分析的添加按钮改为确认，并添加另一门学科',
+      'AI报告展示和导出时清理*号项目符号，并转为数字段落号',
+      '强化解答题分析约束，未提供题目内容或知识点时不得推断三角函数等具体考点'
+    ]
+  },
   {
     version: '1.8.6',
     date: '2026-05-12',

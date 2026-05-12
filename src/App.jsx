@@ -810,11 +810,16 @@ function ScoreLineChart({ title, points, color = '#6366F1', height = 128, yLabel
   )
 }
 
-function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord }) {
-  const [expanded, setExpanded] = useState(false)
-  const [showSubjects, setShowSubjects] = useState(false)
+function TrendAnalysis({ history, city, grade, onUpdateRecord, onDeleteRecord, defaultExpanded = false, defaultShowSubjects = false }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [showSubjects, setShowSubjects] = useState(defaultShowSubjects)
   const [editingRecord, setEditingRecord] = useState(null)
   const [pendingAction, setPendingAction] = useState('')
+
+  useEffect(() => {
+    setExpanded(defaultExpanded)
+    setShowSubjects(defaultShowSubjects)
+  }, [defaultExpanded, defaultShowSubjects])
 
   if (history.length === 0) {
     return (
@@ -2067,7 +2072,7 @@ function TrendDetailNotice({ analysis, onRunSubjectTrendAnalysis, onSubjectTrend
               onClick={handleAddSubjectEntry}
               className="w-full rounded-xl border border-amber-300 bg-white px-4 py-3 text-sm font-bold text-amber-700"
             >
-              添加另一门学科
+              确认，并添加另一门学科
             </button>
             <button
               type="button"
@@ -2333,9 +2338,19 @@ function getCustomApiKey(providerKey, customKeys) {
 function sanitizeAiReport(report) {
   if (!report || typeof report !== 'string') return ''
 
+  let bulletIndex = 1
+
   return report
     .split('\n')
-    .map(line => line.replace(/^\s{0,3}#{1,6}\s*/, ''))
+    .map(line => {
+      const withoutHeading = line.replace(/^\s{0,3}#{1,6}\s*/, '')
+      const bulletMatch = withoutHeading.match(/^\s*[-*•]\s+(.+)$/)
+      if (bulletMatch) {
+        return `${bulletIndex++}、${bulletMatch[1].replace(/\*/g, '').trim()}`
+      }
+
+      return withoutHeading.replace(/\*/g, '')
+    })
     .join('\n')
     .trim()
 }
@@ -2439,10 +2454,11 @@ function buildSubjectTrendAnalysisPrompt(entries, analysis, city, grade) {
     '1、每个学科独立成段，先写学科名称。',
     '2、必须严格基于用户上传图片中可见内容、用户手动输入的题型/模块得分、当前成绩和历史趋势进行分析。',
     '3、没有在图片或描述中出现的知识点、题型或章节，绝不能自行推断或编造；例如未看到“三角函数、数列、立体几何”等字样或对应题号说明时，不得输出这些具体知识点。',
-    '4、如果材料只包含总分或学科总分，只能判断分数趋势，必须明确说明“无法判断具体题型或知识点失分原因”。',
-    '5、每个具体结论后尽量写明依据来自“图片可见内容/用户手动输入/历史分数趋势/本次成绩”。',
-    '6、要结合历史分数趋势、当前分数和用户补充材料，给出可执行建议。',
-    '7、不要使用 # 号标题。',
+    '4、如果只看到“解答题”“大题”“第X题”等笼统描述，但没有题目内容、知识点或模块名称，不得推断具体考点，只能说明该模块失分并要求用户补充题目内容后再定位原因。',
+    '5、如果材料只包含总分或学科总分，只能判断分数趋势，必须明确说明“无法判断具体题型或知识点失分原因”。',
+    '6、每个具体结论后尽量写明依据来自“图片可见内容/用户手动输入/历史分数趋势/本次成绩”。',
+    '7、要结合历史分数趋势、当前分数和用户补充材料，给出可执行建议。',
+    '8、不要使用 # 号标题，不要使用 * 号项目符号或 Markdown 加粗，段落编号统一使用 1、2、3、。',
     '',
     '【报告格式】',
     '1、学科趋势判断',
@@ -3537,88 +3553,78 @@ export default function App() {
               )}
             </button>
 
-            <button
-              onClick={() => setStep(0)}
-              className="w-full btn-secondary"
-            >
-              返回
-            </button>
           </div>
         )}
 
         {step === 2 && analysis && (
-          <div className="animate-slideUp grid lg:grid-cols-[0.95fr_1.05fr] gap-3">
-            <div className="space-y-3">
-              <div className="text-center bg-white rounded-xl shadow-md p-3 border border-gray-100">
-                <p className="text-sm text-gray-500 mb-1">AI基础分析完成</p>
-                <p className="text-xs text-gray-400">
-                  {city} · {grade} · {AI_PROVIDERS[aiProvider].name}
-                </p>
+          <div className="animate-slideUp space-y-3">
+            <div className="grid lg:grid-cols-[0.95fr_1.05fr] gap-3">
+              <div className="space-y-3">
+                <div className="text-center bg-white rounded-xl shadow-md p-3 border border-gray-100">
+                  <p className="text-sm text-gray-500 mb-1">AI基础分析完成</p>
+                  <p className="text-xs text-gray-400">
+                    {city} · {grade} · {AI_PROVIDERS[aiProvider].name}
+                  </p>
+                </div>
+
+                {warnings.length > 0 && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+                    <div className="font-medium mb-2">确认提醒</div>
+                    <ul className="space-y-1">
+                      {warnings.map(item => (
+                        <li key={item}>• {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <FreeAnalysisCard analysis={analysis} />
+                {user && (
+                  <TrendAnalysis
+                    history={history}
+                    city={city}
+                    grade={grade}
+                    onUpdateRecord={handleUpdateHistoryRecord}
+                    onDeleteRecord={handleDeleteHistoryRecord}
+                    defaultExpanded
+                    defaultShowSubjects
+                  />
+                )}
+                <SubjectSelectionCard selection={analysis.subjectSelection} />
+                <AnalysisEvidenceCard analysis={analysis} />
+                <EnhancedAnalysisCta analysis={analysis} onStart={goToEnhancedAnalysis} />
               </div>
 
-            {warnings.length > 0 && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
-                <div className="font-medium mb-2">确认提醒</div>
-                <ul className="space-y-1">
-                  {warnings.map(item => (
-                    <li key={item}>• {item}</li>
-                  ))}
-                </ul>
+              <div className="space-y-3">
+                <EducationDeptAppendix currentCity={city} />
               </div>
-            )}
-
-            <FreeAnalysisCard analysis={analysis} />
-            {user && (
-              <TrendAnalysis
-                history={history}
-                city={city}
-                grade={grade}
-                onUpdateRecord={handleUpdateHistoryRecord}
-                onDeleteRecord={handleDeleteHistoryRecord}
-              />
-            )}
-            <SubjectSelectionCard selection={analysis.subjectSelection} />
-            <AnalysisEvidenceCard analysis={analysis} />
-            <EnhancedAnalysisCta analysis={analysis} onStart={goToEnhancedAnalysis} />
-            <button
-              onClick={() => setStep(1)}
-              className="w-full btn-secondary"
-            >
-              返回上一步
-            </button>
             </div>
 
-            <div className="space-y-3">
-              <EducationDeptAppendix currentCity={city} />
-            </div>
           </div>
         )}
 
         {step === 3 && analysis && (
-          <div className="animate-slideUp grid lg:grid-cols-[0.85fr_1.15fr] gap-3">
-            <div className="space-y-3">
-              <div className="text-center bg-white rounded-xl shadow-md p-3 border border-amber-100">
-                <p className="text-sm font-semibold text-amber-600 mb-1">AI增强分析</p>
-                <p className="text-xs text-gray-400">
-                  调试阶段已跳过付费验证 · 正式版此处接入支付
-                </p>
+          <div className="animate-slideUp space-y-3">
+            <div className="grid lg:grid-cols-[0.85fr_1.15fr] gap-3">
+              <div className="space-y-3">
+                <div className="text-center bg-white rounded-xl shadow-md p-3 border border-amber-100">
+                  <p className="text-sm font-semibold text-amber-600 mb-1">AI增强分析</p>
+                  <p className="text-xs text-gray-400">
+                    调试阶段已跳过付费验证 · 正式版此处接入支付
+                  </p>
+                </div>
+                <FreeAnalysisCard analysis={analysis} />
               </div>
-              <FreeAnalysisCard analysis={analysis} />
-              <button
-                onClick={() => setStep(2)}
-                className="w-full btn-secondary"
-              >
-                返回AI基础分析
-              </button>
+
+              <div ref={premiumTopRef}>
+                <PremiumAnalysisCard
+                  analysis={analysis}
+                  onRunSubjectTrendAnalysis={runSubjectTrendAnalysis}
+                  onSubjectTrendAnalysisDone={handleSubjectTrendAnalysisDone}
+                />
+              </div>
             </div>
 
-            <div ref={premiumTopRef}>
-              <PremiumAnalysisCard
-                analysis={analysis}
-                onRunSubjectTrendAnalysis={runSubjectTrendAnalysis}
-                onSubjectTrendAnalysisDone={handleSubjectTrendAnalysisDone}
-              />
-            </div>
           </div>
         )}
 
@@ -3626,6 +3632,16 @@ export default function App() {
           <p>AI 分析仅供参考，需结合实际试卷和学习情况判断</p>
           <p className="mt-1">AIScoreAnalysis v{VERSION} · {BUILD_DATE}</p>
         </footer>
+
+        {step > 0 && (
+          <button
+            type="button"
+            onClick={() => setStep(previousStep => Math.max(previousStep - 1, 0))}
+            className="mt-3 w-full btn-secondary"
+          >
+            返回上一步
+          </button>
+        )}
       </div>
     </div>
   )
