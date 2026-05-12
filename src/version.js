@@ -3,11 +3,23 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.9.0';
+export const VERSION = '1.9.1';
 export const BUILD_DATE = '2026-05-12';
-export const BUILD_NUMBER = '20260512-06';
+export const BUILD_NUMBER = '20260512-07';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.1',
+    date: '2026-05-12',
+    author: 'Codex',
+    changes: [
+      '明确当前方向改为微信小程序原生产品设计，不再推进H5部署方案',
+      '新增微信小程序产品与交互设计文档，覆盖首页、成绩确认、AI基础分析、AI增强分析和验收标准',
+      '补充小程序视觉规范与design tokens，统一手机单列、卡片、按钮和颜色规则',
+      '调整小程序首页骨架为微信账号卡片和录入成绩工作台结构',
+      '补充小程序端README设计原则，强调AI分析不能无依据猜测'
+    ]
+  },
   {
     version: '1.9.0',
     date: '2026-05-12',
