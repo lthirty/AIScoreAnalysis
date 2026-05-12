@@ -1874,6 +1874,7 @@ function TrendDetailNotice({ analysis, onRunSubjectTrendAnalysis, onSubjectTrend
   const [paperImage, setPaperImage] = useState(defaultImageSlot)
   const [paperDetail, setPaperDetail] = useState('')
   const [pendingEntries, setPendingEntries] = useState([])
+  const [previewEntryId, setPreviewEntryId] = useState('')
   const [analysisStatus, setAnalysisStatus] = useState('')
   const [analyzingSubject, setAnalyzingSubject] = useState(false)
 
@@ -1920,6 +1921,7 @@ function TrendDetailNotice({ analysis, onRunSubjectTrendAnalysis, onSubjectTrend
     setSubjectName('')
     setPaperDetail('')
     setPaperImage(defaultImageSlot())
+    setPreviewEntryId('')
   }
 
   const handleAddSubjectEntry = () => {
@@ -1932,6 +1934,22 @@ function TrendDetailNotice({ analysis, onRunSubjectTrendAnalysis, onSubjectTrend
     setPendingEntries(prev => [...prev, entry])
     clearCurrentEntry()
     setAnalysisStatus(`已加入${entry.subject}，可以继续导入另一门学科，或点击“开始分析”统一分析。`)
+  }
+
+  const handleEditSubjectEntry = (entryId) => {
+    const entry = pendingEntries.find(item => item.id === entryId)
+    if (!entry) return
+
+    setSubjectName(entry.subject)
+    setMode(entry.mode)
+    setPaperDetail(entry.detail || '')
+    setPaperImage(entry.mode === 'upload' ? {
+      file: entry.file,
+      preview: entry.preview
+    } : defaultImageSlot())
+    setPendingEntries(prev => prev.filter(item => item.id !== entryId))
+    setPreviewEntryId('')
+    setAnalysisStatus(`正在修改${entry.subject}，调整后可重新添加。`)
   }
 
   const handleRemoveSubjectEntry = (entryId) => {
@@ -1999,6 +2017,9 @@ function TrendDetailNotice({ analysis, onRunSubjectTrendAnalysis, onSubjectTrend
           <p>
             如果需要分析每门学科的真实变化原因，请导入各科试卷照片，或手动输入各科试卷里每个部分的分数和丢分情况，例如英语的选择题、填空题、判断题、作文题等。只有总分和学科总分时，系统只能判断分数曲线变化，不能准确定位题型短板。
           </p>
+          <p className="rounded-xl bg-red-50 border border-red-100 px-3 py-2 text-xs font-medium text-red-600">
+            重要：没有在图片或描述中出现的知识点，AI 不允许自行猜测；材料不足时只说明“无法判断具体失分点”。
+          </p>
           <div className="bg-gray-50 rounded-xl p-3">
             <label className="block text-sm font-medium text-gray-700 mb-2">本次要分析的学科</label>
             <input
@@ -2034,10 +2055,10 @@ function TrendDetailNotice({ analysis, onRunSubjectTrendAnalysis, onSubjectTrend
               <textarea
                 value={paperDetail}
                 onChange={(event) => setPaperDetail(event.target.value)}
-                placeholder="示例：英语：选择题 30/40，填空题 12/15，作文 18/25；数学：选择题错2题，函数大题丢8分..."
+                placeholder="示例：英语：选择题 30/40，填空题 12/15，作文 18/25。只填写你在试卷或统计表里真实看到的模块和分数，不确定就不要写。"
                 className="w-full min-h-28 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary"
               />
-              <p className="mt-2 text-xs text-gray-400">当前为调试入口，信息暂不提交；后续会接入增强分析模型。</p>
+              <p className="mt-2 text-xs text-gray-400">可以继续导入另一门学科，或点击“开始分析”统一分析。</p>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2046,7 +2067,7 @@ function TrendDetailNotice({ analysis, onRunSubjectTrendAnalysis, onSubjectTrend
               onClick={handleAddSubjectEntry}
               className="w-full rounded-xl border border-amber-300 bg-white px-4 py-3 text-sm font-bold text-amber-700"
             >
-              加入待分析学科
+              添加另一门学科
             </button>
             <button
               type="button"
@@ -2062,17 +2083,48 @@ function TrendDetailNotice({ analysis, onRunSubjectTrendAnalysis, onSubjectTrend
               <p className="text-sm font-medium text-gray-700 mb-2">待分析学科</p>
               <div className="space-y-2">
                 {pendingEntries.map(entry => (
-                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-xs">
-                    <span className="font-medium text-gray-700">
-                      {entry.subject} · {entry.mode === 'upload' ? entry.imageName : '手动输入题型得分'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSubjectEntry(entry.id)}
-                      className="text-red-500"
-                    >
-                      删除
-                    </button>
+                  <div key={entry.id} className="rounded-lg bg-amber-50 px-3 py-2 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-gray-700">
+                        {entry.subject} · {entry.mode === 'upload' ? entry.imageName : '手动输入题型得分'}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewEntryId(previewEntryId === entry.id ? '' : entry.id)}
+                          className="text-primary"
+                        >
+                          {previewEntryId === entry.id ? '收起' : '预览'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEditSubjectEntry(entry.id)}
+                          className="text-amber-700"
+                        >
+                          修改/重传
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSubjectEntry(entry.id)}
+                          className="text-red-500"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                    {previewEntryId === entry.id && (
+                      <div className="mt-2 rounded-lg bg-white p-2 border border-amber-100 text-gray-600">
+                        {entry.mode === 'upload' ? (
+                          entry.preview ? (
+                            <img src={entry.preview} alt={`${entry.subject}附件预览`} className="max-h-56 w-full rounded-lg object-contain bg-gray-50" />
+                          ) : (
+                            <p>图片附件：{entry.imageName}</p>
+                          )
+                        ) : (
+                          <p className="whitespace-pre-line">{entry.detail}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2385,9 +2437,12 @@ function buildSubjectTrendAnalysisPrompt(entries, analysis, city, grade) {
     '',
     '【输出要求】',
     '1、每个学科独立成段，先写学科名称。',
-    '2、如果用户提供了题型得分或试卷图片，可以分析具体题型短板；如果没有，不要编造题型失分原因。',
-    '3、要结合历史分数趋势、当前分数和用户补充材料，给出可执行建议。',
-    '4、不要使用 # 号标题。',
+    '2、必须严格基于用户上传图片中可见内容、用户手动输入的题型/模块得分、当前成绩和历史趋势进行分析。',
+    '3、没有在图片或描述中出现的知识点、题型或章节，绝不能自行推断或编造；例如未看到“三角函数、数列、立体几何”等字样或对应题号说明时，不得输出这些具体知识点。',
+    '4、如果材料只包含总分或学科总分，只能判断分数趋势，必须明确说明“无法判断具体题型或知识点失分原因”。',
+    '5、每个具体结论后尽量写明依据来自“图片可见内容/用户手动输入/历史分数趋势/本次成绩”。',
+    '6、要结合历史分数趋势、当前分数和用户补充材料，给出可执行建议。',
+    '7、不要使用 # 号标题。',
     '',
     '【报告格式】',
     '1、学科趋势判断',

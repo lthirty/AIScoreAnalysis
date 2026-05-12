@@ -3,11 +3,22 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.8.5';
+export const VERSION = '1.8.6';
 export const BUILD_DATE = '2026-05-12';
-export const BUILD_NUMBER = '20260512-03';
+export const BUILD_NUMBER = '20260512-04';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.6',
+    date: '2026-05-12',
+    author: 'Codex',
+    changes: [
+      '强化各科趋势深度分析提示词，禁止编造未出现在图片或描述中的具体知识点',
+      '待分析学科附件支持预览、修改/重传和删除',
+      '将加入待分析学科按钮改为添加另一门学科',
+      '更新手动输入说明，提示可继续导入另一门学科或统一开始分析'
+    ]
+  },
   {
     version: '1.8.5',
     date: '2026-05-12',
