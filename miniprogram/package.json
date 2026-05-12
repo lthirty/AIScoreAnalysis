@@ -1,0 +1,26 @@
+{
+  "name": "aiscoreanalysis-miniprogram",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AIScoreAnalysis 微信小程序端",
+  "scripts": {
+    "dev:weapp": "taro build --type weapp --watch",
+    "build:weapp": "taro build --type weapp"
+  },
+  "dependencies": {
+    "@tarojs/components": "^4.1.9",
+    "@tarojs/helper": "^4.1.9",
+    "@tarojs/plugin-framework-react": "^4.1.9",
+    "@tarojs/plugin-platform-weapp": "^4.1.9",
+    "@tarojs/react": "^4.1.9",
+    "@tarojs/runtime": "^4.1.9",
+    "@tarojs/taro": "^4.1.9",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.0",
+    "@tarojs/cli": "^4.1.9",
+    "babel-preset-taro": "^4.1.9"
+  }
+}

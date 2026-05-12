@@ -6,3 +6,4 @@ dist/
 *.log
 .env
 .env.*
+sync.ffs_db

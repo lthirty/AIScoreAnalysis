@@ -1,0 +1,24 @@
+.index-page {
+  .title {
+    display: block;
+    font-size: 40rpx;
+    font-weight: 800;
+  }
+
+  .subtitle,
+  .login-state {
+    display: block;
+    margin-top: 16rpx;
+    color: #6b7280;
+    font-size: 26rpx;
+    line-height: 1.6;
+  }
+
+  .secondary-button {
+    margin-top: 24rpx;
+    border-radius: 18rpx;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-weight: 700;
+  }
+}

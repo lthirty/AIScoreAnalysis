@@ -1,0 +1,14 @@
+{
+  "miniprogramRoot": "dist/",
+  "projectname": "AIScoreAnalysis",
+  "description": "AI成绩分析微信小程序",
+  "appid": "touristappid",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true
+  },
+  "compileType": "miniprogram"
+}

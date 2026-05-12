@@ -1,6 +1,6 @@
 {
   "name": "aiscoreanalysis",
-  "version": "1.8.7",
+  "version": "1.9.0",
   "description": "AI学生成绩分析小程序",
   "type": "commonjs",
   "scripts": {

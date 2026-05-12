@@ -3,11 +3,24 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.8.7';
+export const VERSION = '1.9.0';
 export const BUILD_DATE = '2026-05-12';
-export const BUILD_NUMBER = '20260512-05';
+export const BUILD_NUMBER = '20260512-06';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.0',
+    date: '2026-05-12',
+    author: 'Codex',
+    changes: [
+      '新增微信小程序正式迁移架构文档，明确10K用户/10并发及扩展到100K用户/100并发方案',
+      '新增miniprogram目录，提供Taro微信小程序页面、登录、上传、成绩记录和分析服务骨架',
+      '新增server目录，提供微信登录、考试记录、OCR上传、AI分析接口、数据库schema和服务端安全边界',
+      '明确AI Key必须迁移到服务端环境变量，小程序端只调用自有后端API',
+      '后端AI接口增加单用户并发保护，当前支持10并发并预留Redis队列扩展到100并发',
+      '忽略本地同步数据库文件sync.ffs_db，避免误提交'
+    ]
+  },
   {
     version: '1.8.7',
     date: '2026-05-12',
