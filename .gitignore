@@ -1,5 +1,8 @@
 node_modules/
 dist/
+.venv/
+__pycache__/
+*.py[cod]
 .claude/
 .history/
 .DS_Store
@@ -7,3 +10,6 @@ dist/
 .env
 .env.*
 sync.ffs_db
+deploy/cloudbase/*.zip
+deploy/cloudbase/ai-score-api-source/
+miniprogram-native/project.private.config.json

@@ -1,0 +1,91 @@
+<view class="page">
+  <view wx:if="{{!hasReport}}" class="empty-state">
+    <view class="title">还没有报告</view>
+    <view class="subtitle">录入一次成绩后，这里会显示最近报告。</view>
+    <button class="primary" bindtap="goInput">录入成绩</button>
+  </view>
+
+  <view wx:if="{{hasReport}}">
+    <view class="app-hero section">
+      <view class="hero-row">
+        <view class="hero-mark">报</view>
+        <view class="hero-copy">
+          <view class="hero-title">AI分析报告</view>
+          <view class="hero-subtitle">{{payload.student.city}} · {{payload.student.grade}} · {{payload.exam.name}}</view>
+        </view>
+        <view wx:if="{{report.mock_report}}" class="status-pill">规则报告</view>
+        <view wx:else class="status-pill">AI报告</view>
+      </view>
+      <view class="stepper">
+        <view class="step">录入方式</view>
+        <view class="step">确认成绩</view>
+        <view class="step active">基础分析</view>
+        <view class="step">增强报告</view>
+      </view>
+    </view>
+
+    <view class="panel section">
+      <view class="section-title">
+        <text>AI基础分析</text>
+        <text class="tag tag-green">已完成</text>
+      </view>
+      <view class="report-summary">{{report.summary}}</view>
+    </view>
+
+    <view class="panel section">
+      <view class="section-title">学科表现</view>
+      <view wx:for="{{report.subject_performance}}" wx:key="name" class="list-item">
+        <view class="score-line">
+          <view>
+            <view class="score-main">{{item.name}} {{item.score}}/{{item.full_score}}</view>
+            <view class="score-sub">{{item.comment}}</view>
+          </view>
+          <text class="tag tag-blue">{{item.level}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="panel section">
+      <view class="section-title">优先提升</view>
+      <view wx:for="{{report.priority}}" wx:key="name" class="list-item">
+        <view><text class="tag tag-amber">{{item.name}}</text></view>
+        <view class="muted">{{item.reason}}</view>
+        <view class="muted">{{item.action}}</view>
+      </view>
+    </view>
+
+    <view class="panel section">
+      <view class="section-title">两周计划</view>
+      <view wx:for="{{planRows}}" wx:key="number" class="workflow-item list-item">
+        <view class="workflow-index">{{item.number}}</view>
+        <view class="workflow-text">{{item.text}}</view>
+      </view>
+    </view>
+
+    <view class="panel section">
+      <view class="section-title">家长建议</view>
+      <view class="muted">{{report.parent_advice}}</view>
+    </view>
+
+    <view class="panel section">
+      <view class="section-title">选科提示</view>
+      <view class="muted">{{report.elective_advice}}</view>
+    </view>
+
+    <view class="panel section">
+      <view class="section-title">
+        <text>AI增强分析</text>
+        <text class="tag tag-purple">下一步</text>
+      </view>
+      <view class="notice">后续可补充试卷照片、题型得分和历史成绩，用于生成更具体的失分归因与趋势判断。</view>
+    </view>
+
+    <view class="panel section">
+      <view class="muted">{{report.disclaimer}}</view>
+    </view>
+
+    <button class="secondary full-button" bindtap="goInput">重新录入</button>
+  </view>
+
+  <view class="safe-area-bottom"></view>
+</view>

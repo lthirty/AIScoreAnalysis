@@ -8,6 +8,9 @@
 ### 核心体验
 简单三步——导入/录入成绩 → 确认数据 → 获取分析。零门槛，即用即走。
 
+### 当前主线
+当前可运行主线已经从 Web 原型扩展为微信原生小程序 MVP：`miniprogram-native/` 负责微信小程序前端，`backend/` 提供 FastAPI 后端，后端通过 Docker 部署到微信云开发 CloudBase 云托管。AI Key 只保存在云托管环境变量中，小程序通过 `wx.cloud.callContainer` 调用 `ai-score-api`。
+
 ### 情感定位
 温暖、专业、鼓励性。不是冷冰冰的数据报告，而是像一位耐心的学长/学姐在帮助你分析学习情况。
 
@@ -19,6 +22,9 @@
 | 类别 | 技术 | 说明 |
 |------|------|------|
 | 前端框架 | React 18 + Vite | 快速开发，热更新 |
+| 小程序前端 | 微信原生小程序 | 当前 MVP 主线，目录 `miniprogram-native/` |
+| 后端服务 | FastAPI + Uvicorn | 目录 `backend/`，提供 OCR、解析和报告接口 |
+| 部署平台 | 微信云开发 CloudBase 云托管 | 服务名 `ai-score-api`，容器端口 `8080` |
 | 样式方案 | Tailwind CSS | 原子化CSS，响应式 |
 | AI OCR | 阿里百炼 qwen-vl-max-latest | 图像识别，支持base64 |
 | AI 分析 | 阿里百炼 qwen-max-latest | 文本深度分析 |
@@ -30,6 +36,9 @@
 aiscoreanalysis/
 ├── docs/
 │   └── wechat-miniprogram-migration.md  # 微信小程序正式迁移方案
+├── backend/              # FastAPI 后端，Docker 化部署到 CloudBase 云托管
+├── deploy/cloudbase/     # CloudBase 部署说明和本地生成的部署包位置
+├── miniprogram-native/   # 微信原生小程序 MVP
 ├── miniprogram/          # Taro 微信小程序迁移骨架
 ├── server/               # 微信登录、成绩记录、AI分析后端骨架
 ├── src/
@@ -55,12 +64,22 @@ aiscoreanalysis/
 
 ## 3. AI 服务商配置
 
-### 当前配置 (App.jsx)
+### 当前生产配置
+生产环境使用 `backend/` 读取环境变量，不在前端代码中保存密钥：
+
+```text
+DASHSCOPE_API_KEY=your Aliyun Bailian API key
+DASHSCOPE_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
+OCR_MODEL=qwen-vl-max-latest
+ANALYZE_MODEL=qwen-max-latest
+```
+
+### Web 原型配置 (App.jsx)
 ```javascript
 AI_PROVIDERS = {
   aliyun: {
     name: '阿里百炼',
-    apiKey: 'sk-7e50288cd0d549e98ff4d8ed4bf2a399',
+    apiKey: '配置在本地环境或服务端环境变量中，禁止提交真实 Key',
     endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
     model: 'qwen-vl-max-latest',   // 图像识别模型
     supportsVision: true
@@ -95,6 +114,15 @@ messages: [{
   content: buildDeepAnalysisPrompt(...)
 }]
 ```
+
+### 微信小程序正式链路
+
+```text
+文字录入 -> /api/parse-score-text -> 确认成绩 -> /api/analyze-score-job -> 轮询报告结果
+截图识别 -> wx.cloud.uploadFile -> wx.cloud.getTempFileURL -> /api/ocr-score-job -> 轮询 OCR 结果 -> 确认成绩
+```
+
+同步接口仍保留用于调试，但小程序端优先使用任务接口，避免微信云托管同步调用超时。
 
 ---
 
@@ -136,6 +164,33 @@ if (data.choices && data.choices[0]?.message?.content) {
 - 强化 `buildOcrPrompt` 函数中的规则
 - 明确区分成绩列与排名列
 - 增加人工确认步骤
+
+### 问题5：腾讯云账号与小程序归属不一致
+**现象**：`wx.cloud.callContainer` 报 `Invalid host` 或 `-606001`。
+**原因**：小程序 AppID 与 CloudBase 环境不在同一个已关联的腾讯云账号体系内。
+**解决方案**：统一微信公众平台和腾讯云 CloudBase 账号到 `100048832005`，在微信开发者工具中创建并识别可用云开发环境，环境 ID 为 `ai-score-prod-d8gei4o0y0d5064bc`。
+
+### 问题6：云托管默认域名不能作为正式 request 合法域名
+**现象**：微信公众平台提示云托管默认域名仅用于测试，不能配置为正式服务器域名。
+**解决方案**：正式链路改用 `wx.cloud.callContainer`，不再依赖 `wx.request` 直连默认域名。
+
+### 问题7：图片 base64 超过 callContainer 请求体限制
+**现象**：图片 OCR 报 `input data size too large (> 100KB)`。
+**原因**：`callContainer` 单次请求体限制较小，base64 会进一步膨胀。
+**解决方案**：小程序改为先 `wx.cloud.uploadFile` 上传云存储，再 `wx.cloud.getTempFileURL` 获取短链接，后端通过临时 URL 下载原图后交给百炼 OCR。
+
+### 问题8：OCR 和 AI 报告生成同步等待超时
+**现象**：`cloud.callContainer:fail 102002`，提示请求超时。
+**原因**：原图 OCR 和 AI 报告生成耗时超过微信云托管同步调用等待窗口。
+**解决方案**：后端新增异步任务接口：`/api/ocr-score-job`、`/api/analyze-score-job`。小程序提交任务后每 2 秒轮询状态，完成后再进入确认页或报告页。
+
+### 问题9：小程序 OCR 精度低于 Web 原型
+**原因**：为提速曾改用 `qwen-vl-ocr-latest` 并压缩图片，导致表格小字信息损失。
+**解决方案**：恢复到 Web 原型更接近的路径：原图上传、后端不二次压缩、OCR 模型使用 `qwen-vl-max-latest`。
+
+### 问题10：AI 报告生成期间屏幕闪烁
+**原因**：按钮 loading 与轮询状态叠加，造成页面视觉频繁刷新。
+**解决方案**：确认页改为固定遮罩展示“正在生成 AI 报告”，按钮仅禁用，不再使用按钮内 loading 动画。
 
 ---
 
@@ -275,6 +330,7 @@ PRIMARY_FULL_SCORES = {
 
 | 版本 | 日期 | 修改内容 |
 |------|------|----------|
+| 2.0.0 | 2026-05-14 | 完成微信原生小程序 MVP 与 FastAPI 后端；后端 Docker 化部署到微信云开发 CloudBase 云托管；正式链路使用 `wx.cloud.callContainer`；图片 OCR 改为云存储中转；OCR 和 AI 报告生成改为异步任务轮询；修复 AI 报告生成期间屏幕闪烁；整理部署问题和处理措施 |
 | 1.9.1 | 2026-05-12 | 明确转向微信小程序原生产品设计；新增小程序产品与交互设计文档；补充视觉规范和 design tokens；调整小程序首页为微信账号与录入成绩工作台结构 |
 | 1.9.0 | 2026-05-12 | 新增微信小程序正式迁移方案文档；新增 Taro 小程序端骨架；新增后端服务、OCR上传、AI分析、数据库 schema 和 AI Key 服务端化边界；明确 10K 用户/10 并发及扩展到 100K 用户/100 并发的架构要求 |
 | 1.8.7 | 2026-05-12 | 统一返回按钮位置和文案；AI基础分析页历史趋势默认完整展开；添加学科按钮改名；AI报告清理星号并使用数字段落号；强化解答题未提供内容时不得猜测具体考点 |

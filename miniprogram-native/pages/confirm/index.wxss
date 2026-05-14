@@ -1,0 +1,56 @@
+.report-mask {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.48);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 48rpx;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 20;
+}
+
+.report-progress {
+  background: #ffffff;
+  border-radius: 8rpx;
+  box-shadow: 0 18rpx 50rpx rgba(15, 23, 42, 0.18);
+  box-sizing: border-box;
+  padding: 44rpx 36rpx;
+  text-align: center;
+  width: 560rpx;
+}
+
+.report-spinner {
+  animation: report-spin 900ms linear infinite;
+  border: 6rpx solid #e0e7ff;
+  border-top-color: #6366f1;
+  border-radius: 999rpx;
+  height: 64rpx;
+  margin: 0 auto 24rpx;
+  width: 64rpx;
+}
+
+.report-progress-title {
+  color: #111827;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.report-progress-text {
+  color: #64748b;
+  font-size: 24rpx;
+  line-height: 1.6;
+  margin-top: 12rpx;
+}
+
+@keyframes report-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

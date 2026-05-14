@@ -3,11 +3,24 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '1.9.1';
-export const BUILD_DATE = '2026-05-12';
-export const BUILD_NUMBER = '20260512-07';
+export const VERSION = '2.0.0';
+export const BUILD_DATE = '2026-05-14';
+export const BUILD_NUMBER = '20260514-01';
 
 export const CHANGELOG = [
+  {
+    version: '2.0.0',
+    date: '2026-05-14',
+    author: 'Codex',
+    changes: [
+      '新增微信原生小程序 miniprogram-native，保留原产品风格并接入文字录入、双截图OCR、成绩确认和AI报告生成',
+      '新增 FastAPI 后端 backend，Docker 化部署到微信云开发 CloudBase 云托管 ai-score-api',
+      '小程序正式链路切换为 wx.cloud.callContainer，AI Key 仅保存在服务端环境变量',
+      'OCR 图片上传改为云存储中转，避开 callContainer 100KB 请求体限制',
+      'OCR 和 AI 报告生成改为异步任务轮询，规避 callContainer 同步等待超时',
+      '确认页生成报告阶段新增稳定遮罩，减少轮询期间屏幕闪烁'
+    ]
+  },
   {
     version: '1.9.1',
     date: '2026-05-12',

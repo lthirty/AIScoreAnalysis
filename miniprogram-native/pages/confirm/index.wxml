@@ -1,0 +1,75 @@
+<view class="page">
+  <view class="app-hero section">
+    <view class="hero-row">
+      <view class="hero-mark">核</view>
+      <view class="hero-copy">
+        <view class="hero-title">确认成绩</view>
+        <view class="hero-subtitle">检查科目、得分和满分，确认后生成 AI 报告。</view>
+      </view>
+    </view>
+    <view class="stepper">
+      <view class="step">录入方式</view>
+      <view class="step active">确认成绩</view>
+      <view class="step">基础分析</view>
+      <view class="step">增强报告</view>
+    </view>
+    <view class="metric-row">
+      <view class="metric">
+        <view class="metric-value">{{subjects.length}}</view>
+        <view class="metric-label">科目</view>
+      </view>
+      <view class="metric">
+        <view class="metric-value">{{totalScore}}</view>
+        <view class="metric-label">总分</view>
+      </view>
+      <view class="metric">
+        <view class="metric-value">{{fullScore}}</view>
+        <view class="metric-label">满分</view>
+      </view>
+      <view class="metric">
+        <view class="metric-value">{{maxTotalScore}}</view>
+        <view class="metric-label">对比总分</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="panel section">
+    <view class="section-title">成绩明细</view>
+    <view class="muted">{{draft.student.city}} · {{draft.student.grade}} · {{draft.exam.name}}</view>
+    <view class="notice">如果 OCR 或文字解析把排名识别成分数，可以在这里直接修正。</view>
+    <view class="subject-row subject-header">
+      <view>科目</view>
+      <view>得分</view>
+      <view>满分</view>
+    </view>
+    <view wx:for="{{subjects}}" wx:key="index" class="subject-row">
+      <input class="input" value="{{item.name}}" data-index="{{index}}" data-field="name" bindinput="onSubjectInput" />
+      <input class="input" type="digit" value="{{item.score}}" data-index="{{index}}" data-field="score" bindinput="onSubjectInput" />
+      <input class="input" type="digit" value="{{item.full_score}}" data-index="{{index}}" data-field="full_score" bindinput="onSubjectInput" />
+    </view>
+  </view>
+
+  <view wx:if="{{hasMaxSubjects}}" class="panel section">
+    <view class="section-title">班级/年段最好成绩和排名</view>
+    <view class="subject-row subject-header">
+      <view>科目</view>
+      <view>最高/参考分</view>
+      <view>满分</view>
+    </view>
+    <view wx:for="{{maxSubjects}}" wx:key="index" class="subject-row">
+      <view class="score-main">{{item.name}}</view>
+      <view class="score-main">{{item.score}}</view>
+      <view class="muted">{{item.full_score}}</view>
+    </view>
+  </view>
+
+  <button class="primary full-button" disabled="{{loading}}" bindtap="analyze">{{loading ? '生成中' : '生成 AI 报告'}}</button>
+  <view wx:if="{{loading}}" class="report-mask">
+    <view class="report-progress">
+      <view class="report-spinner"></view>
+      <view class="report-progress-title">正在生成 AI 报告</view>
+      <view class="report-progress-text">{{reportStatusText}}</view>
+    </view>
+  </view>
+  <view class="safe-area-bottom"></view>
+</view>

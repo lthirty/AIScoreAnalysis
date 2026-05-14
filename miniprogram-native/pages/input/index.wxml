@@ -1,0 +1,84 @@
+<view class="page">
+  <view class="app-hero section">
+    <view class="hero-row">
+      <view class="hero-mark">录</view>
+      <view class="hero-copy">
+        <view class="hero-title">录入成绩</view>
+        <view class="hero-subtitle">先把成绩整理成结构化数据，再交给 AI 生成报告。</view>
+      </view>
+    </view>
+    <view class="stepper">
+      <view class="step active">录入方式</view>
+      <view class="step">确认成绩</view>
+      <view class="step">基础分析</view>
+      <view class="step">增强报告</view>
+    </view>
+  </view>
+
+  <view class="panel section">
+    <view class="segmented">
+      <view class="segment {{textModeClass}}" data-mode="text" bindtap="switchMode">文字录入</view>
+      <view class="segment {{imageModeClass}}" data-mode="image" bindtap="switchMode">截图识别</view>
+    </view>
+  </view>
+
+  <view class="panel section">
+    <view class="section-title">基础信息</view>
+    <label class="label">所在城市</label>
+    <input class="input" value="{{city}}" bindinput="onCityInput" placeholder="杭州" />
+
+    <label class="label">年级</label>
+    <input class="input" value="{{grade}}" bindinput="onGradeInput" placeholder="高一" />
+
+    <label class="label">考试名称</label>
+    <input class="input" value="{{examName}}" bindinput="onExamInput" placeholder="期中考试" />
+  </view>
+
+  <view class="panel section" wx:if="{{showTextMode}}">
+    <view class="section-title">成绩描述</view>
+    <view class="notice">可以直接输入一句话，例如“高一期中考试，数学108分，英语126分，物理78分，化学82分”。</view>
+    <textarea class="textarea" value="{{text}}" bindinput="onTextInput" placeholder="例如：高一期中考试，数学108分，英语126分，物理78分，化学82分" />
+    <button class="primary full-button" loading="{{loading}}" bindtap="parseScore">解析并确认</button>
+  </view>
+
+  <view class="panel section" wx:if="{{showImageMode}}">
+    <view class="section-title">成绩截图</view>
+    <view class="notice">上传两类截图后，先识别个人成绩，再识别班级/年段最好成绩和排名，用于生成更有对比价值的报告。</view>
+
+    <view class="upload-grid">
+      <view class="upload-card {{myImageClass}}">
+        <view class="upload-head">
+          <view>
+            <view class="upload-title">个人成绩截图</view>
+            <view class="upload-desc">导入学生本人成绩单、考试截图或照片。</view>
+          </view>
+          <text class="tag tag-blue">必填</text>
+        </view>
+        <image wx:if="{{myImage.path}}" class="upload-preview" mode="aspectFill" src="{{myImage.path}}" />
+        <view class="upload-actions">
+          <button class="primary mini-button" data-type="my" bindtap="chooseImage">选择图片</button>
+          <button wx:if="{{myImage.path}}" class="secondary mini-button" data-type="my" bindtap="removeImage">移除</button>
+        </view>
+      </view>
+
+      <view class="upload-card {{maxImageClass}}">
+        <view class="upload-head">
+          <view>
+            <view class="upload-title">班级/年段最好成绩和排名</view>
+            <view class="upload-desc">导入班级最高分、年段最高分、排名或对比成绩截图。</view>
+          </view>
+          <text class="tag tag-amber">推荐</text>
+        </view>
+        <image wx:if="{{maxImage.path}}" class="upload-preview" mode="aspectFill" src="{{maxImage.path}}" />
+        <view class="upload-actions">
+          <button class="primary mini-button" data-type="max" bindtap="chooseImage">选择图片</button>
+          <button wx:if="{{maxImage.path}}" class="secondary mini-button" data-type="max" bindtap="removeImage">移除</button>
+        </view>
+      </view>
+    </view>
+
+    <button class="primary full-button" loading="{{ocrLoading}}" bindtap="recognizeImages">开始识别并确认</button>
+  </view>
+
+  <view class="safe-area-bottom"></view>
+</view>

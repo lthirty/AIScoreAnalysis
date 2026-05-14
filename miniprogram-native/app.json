@@ -1,0 +1,17 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/input/index",
+    "pages/confirm/index",
+    "pages/report/index",
+    "pages/privacy/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "AI成绩分析",
+    "navigationBarBackgroundColor": "#6366f1",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f8fafc"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

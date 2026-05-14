@@ -1,0 +1,13 @@
+<view class="page">
+  <view class="section">
+    <view class="title">隐私说明</view>
+    <view class="subtitle">本小程序用于生成学习分析报告。</view>
+  </view>
+
+  <view class="panel section">
+    <view class="list-item">会处理你主动输入的成绩、年级、城市和考试名称。</view>
+    <view class="list-item">后续图片 OCR 会把成绩截图发送到后端，再由后端调用阿里百炼。</view>
+    <view class="list-item">AI Key 只保存在服务端环境变量，不写入小程序代码。</view>
+    <view class="list-item">报告仅供学习规划参考，不构成升学、选科或教育决策承诺。</view>
+  </view>
+</view>

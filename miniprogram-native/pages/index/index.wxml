@@ -1,0 +1,71 @@
+<view class="page">
+  <view class="app-hero section">
+    <view class="hero-row">
+      <view class="hero-mark">AI</view>
+      <view class="hero-copy">
+        <view class="hero-title">成绩分析工作台</view>
+        <view class="hero-subtitle">把成绩变成家长能看懂、孩子能执行的两周学习计划。</view>
+      </view>
+      <view class="status-pill">云端已连接</view>
+    </view>
+    <view class="metric-row">
+      <view class="metric">
+        <view class="metric-value">3步</view>
+        <view class="metric-label">完成分析</view>
+      </view>
+      <view class="metric">
+        <view class="metric-value">2周</view>
+        <view class="metric-label">行动周期</view>
+      </view>
+      <view class="metric">
+        <view class="metric-value">AI</view>
+        <view class="metric-label">增强报告</view>
+      </view>
+    </view>
+    <view class="stepper">
+      <view class="step active">录入方式</view>
+      <view class="step">确认成绩</view>
+      <view class="step">基础分析</view>
+      <view class="step">增强报告</view>
+    </view>
+  </view>
+
+  <view class="section">
+    <view class="section-title">
+      <text>开始分析</text>
+      <text class="section-link" bindtap="goPrivacy">隐私说明</text>
+    </view>
+    <view class="action-grid">
+      <view class="action-card primary-card" bindtap="goInput">
+        <view class="action-icon">录</view>
+        <view class="action-title">录入成绩</view>
+        <view class="action-desc">上传截图或手动输入，先核对再分析。</view>
+      </view>
+      <view class="action-card" bindtap="goLastReport">
+        <view class="action-icon">报</view>
+        <view class="action-title">最近报告</view>
+        <view class="action-desc">继续查看上一次分析结果。</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="panel section">
+    <view class="section-title">分析流程</view>
+    <view class="workflow">
+      <view class="workflow-item">
+        <view class="workflow-index">1</view>
+        <view class="workflow-text">录入城市、年级、考试与各科成绩</view>
+      </view>
+      <view class="workflow-item">
+        <view class="workflow-index">2</view>
+        <view class="workflow-text">核对结构化成绩，避免排名与分数混淆</view>
+      </view>
+      <view class="workflow-item">
+        <view class="workflow-index">3</view>
+        <view class="workflow-text">生成基础判断、优先学科和两周计划</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="safe-area-bottom"></view>
+</view>
