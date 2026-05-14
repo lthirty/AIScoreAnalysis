@@ -567,6 +567,21 @@ button.secondary {
   margin-top: 0;
 }
 
+.required {
+  color: #ef4444;
+}
+
+.picker-display {
+  background: #fbfdff;
+  border: 1rpx solid #cbd5e1;
+  border-radius: 8rpx;
+  box-sizing: border-box;
+  color: #334155;
+  font-size: 28rpx;
+  min-height: 84rpx;
+  padding: 18rpx 20rpx;
+}
+
 .mode-summary {
   align-items: center;
   display: flex;

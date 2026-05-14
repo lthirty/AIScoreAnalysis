@@ -12,6 +12,7 @@ Page({
     showImageMode: false,
     modeIcon: '文',
     modeText: '适合已经有成绩文字或家长口述场景，解析后仍会进入确认页。',
+    examDate: '',
     city: '杭州',
     grade: '高一',
     examName: '期中考试',
@@ -45,6 +46,10 @@ Page({
         ? '适合已经有成绩文字或家长口述场景，解析后仍会进入确认页。'
         : '沿用原 Web 版双截图逻辑：个人成绩必填，最高分/排名图可选。'
     })
+  },
+
+  onExamDateChange(event) {
+    this.setData({ examDate: event.detail.value })
   },
 
   onCityInput(event) {
@@ -115,6 +120,10 @@ Page({
       wx.showToast({ title: '请先导入个人成绩', icon: 'none' })
       return
     }
+    if (!this.data.examDate) {
+      wx.showToast({ title: '请先选择考试时间', icon: 'none' })
+      return
+    }
 
     this.setData({ ocrLoading: true })
     try {
@@ -139,7 +148,7 @@ Page({
         },
         exam: {
           name: this.data.examName,
-          date: new Date().toISOString().slice(0, 10)
+          date: this.data.examDate
         },
         subjects: myScore.subjects || [],
         max_subjects: maxScore.subjects || [],
@@ -174,6 +183,10 @@ Page({
       wx.showToast({ title: '请输入成绩', icon: 'none' })
       return
     }
+    if (!this.data.examDate) {
+      wx.showToast({ title: '请先选择考试时间', icon: 'none' })
+      return
+    }
 
     this.setData({ loading: true })
     try {
@@ -182,7 +195,7 @@ Page({
         grade: this.data.grade
       }, {
         name: this.data.examName,
-        date: new Date().toISOString().slice(0, 10)
+        date: this.data.examDate
       })
       if (!draft.subjects || !draft.subjects.length) {
         showError('未解析到成绩', {

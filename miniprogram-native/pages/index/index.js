@@ -1,4 +1,3 @@
-const { CITIES, EDUCATION_DEPT_LINKS } = require('../../utils/constants')
 const { getHistoryRecords, getPreferences, setPreferences } = require('../../utils/storage')
 const { buildTrendSummary } = require('../../utils/trend')
 const { drawLineChart } = require('../../utils/trendCanvas')
@@ -6,9 +5,6 @@ const { drawLineChart } = require('../../utils/trendCanvas')
 Page({
   data: {
     city: '杭州',
-    educationLink: '',
-    cityOptions: CITIES,
-    trendSummary: null,
     historyRecords: [],
     subjectTrendRows: [],
     showTrendEmpty: true
@@ -21,7 +17,6 @@ Page({
     const trendSummary = buildTrendSummary(historyRecords)
     this.setData({
       city,
-      educationLink: EDUCATION_DEPT_LINKS[city] || '',
       historyRecords,
       trendSummary,
       subjectTrendRows: (trendSummary && trendSummary.subjects) || [],
@@ -34,40 +29,8 @@ Page({
 
   onCityInput(event) {
     const city = event.detail.value.trim()
-    this.setData({
-      city,
-      educationLink: EDUCATION_DEPT_LINKS[city] || ''
-    })
-  },
-
-  onCityInputFromChip(event) {
-    const city = event.currentTarget.dataset.city
-    this.setData({
-      city,
-      educationLink: EDUCATION_DEPT_LINKS[city] || ''
-    })
-  },
-
-  saveCityPreference() {
-    const city = this.data.city.trim() || '杭州'
-    const current = getPreferences()
-    setPreferences({
-      ...current,
-      city
-    })
-    this.setData({
-      city,
-      educationLink: EDUCATION_DEPT_LINKS[city] || ''
-    })
-    wx.showToast({ title: '城市已保存', icon: 'success' })
-  },
-
-  copyEducationLink() {
-    const city = this.data.city.trim() || '杭州'
-    const link = this.data.educationLink || `https://www.baidu.com/s?wd=${encodeURIComponent(`${city} 教育局 官方网站`)}`
-    wx.setClipboardData({
-      data: link
-    })
+    this.setData({ city })
+    setPreferences({ city })
   },
 
   renderTrendCharts() {

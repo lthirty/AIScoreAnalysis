@@ -58,23 +58,7 @@
     </view>
   </view>
 
-  <view class="panel section">
-    <view class="section-title">城市与教育局链接</view>
-    <view class="section-subtitle">首页先确定所在城市，后续分析和附录会沿用这个城市设置。</view>
-    <input class="input" value="{{city}}" bindinput="onCityInput" placeholder="请输入或选择城市，例如杭州" />
-    <view class="mini-chip-row">
-      <text wx:for="{{cityOptions}}" wx:key="*this" class="mini-chip city-chip" data-city="{{item}}" bindtap="onCityInputFromChip">{{item}}</text>
-    </view>
-    <view class="notice city-link-box">
-      <view class="score-main">{{city}}</view>
-      <view class="score-sub">{{educationLink || '暂未内置该城市官网链接，将按城市名搜索教育局官网。'}}</view>
-    </view>
-    <view class="button-row">
-      <button class="secondary" bindtap="saveCityPreference">保存城市</button>
-      <button class="primary" bindtap="copyEducationLink">复制链接</button>
-    </view>
-  </view>
-
+  
   <view class="panel section">
     <view class="section-title">历史趋势</view>
     <view wx:if="{{showTrendEmpty}}" class="empty-state">
@@ -118,7 +102,7 @@
     <view class="workflow">
       <view class="workflow-item">
         <view class="workflow-index">1</view>
-        <view class="workflow-text">录入城市、年级、考试与各科成绩</view>
+        <view class="workflow-text">录入年级、考试时间与各科成绩</view>
       </view>
       <view class="workflow-item">
         <view class="workflow-index">2</view>

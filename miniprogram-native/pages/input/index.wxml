@@ -30,8 +30,15 @@
     <view class="section-title">基础信息</view>
     <view class="form-grid">
       <view class="field-card">
-        <label class="label">所在城市</label>
-        <input class="input" value="{{city}}" bindinput="onCityInput" placeholder="杭州" />
+        <label class="label">考试时间 <text class="required">*</text></label>
+        <picker mode="date" value="{{examDate}}" bindchange="onExamDateChange">
+          <view class="input picker-display">{{examDate || '请选择考试日期'}}</view>
+        </picker>
+      </view>
+
+      <view class="field-card">
+        <label class="label">考试名称</label>
+        <input class="input" value="{{examName}}" bindinput="onExamInput" placeholder="期中考试" />
       </view>
 
       <view class="field-card">
@@ -40,8 +47,8 @@
       </view>
 
       <view class="field-card">
-        <label class="label">考试名称</label>
-        <input class="input" value="{{examName}}" bindinput="onExamInput" placeholder="期中考试" />
+        <label class="label">所在城市</label>
+        <input class="input" value="{{city}}" bindinput="onCityInput" placeholder="杭州" />
       </view>
     </view>
   </view>
