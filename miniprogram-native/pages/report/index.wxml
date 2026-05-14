@@ -17,10 +17,14 @@
         <view wx:else class="status-pill">AI报告</view>
       </view>
       <view class="stepper">
-        <view class="step">录入方式</view>
-        <view class="step">确认成绩</view>
+        <view class="step done">录入方式</view>
+        <view class="step done">确认成绩</view>
         <view class="step active">基础分析</view>
         <view class="step">增强报告</view>
+      </view>
+      <view class="hero-foot">
+        <view class="hero-foot-badge">基础版</view>
+        <view class="hero-foot-main">先呈现家长最关心的结论和优先学科，再继续生成增强分析。</view>
       </view>
     </view>
 
@@ -34,7 +38,7 @@
 
     <view class="panel section">
       <view class="section-title">学科表现</view>
-      <view wx:for="{{report.subject_performance}}" wx:key="name" class="list-item">
+      <view wx:for="{{report.subject_performance}}" wx:key="name" class="report-card list-item">
         <view class="score-line">
           <view>
             <view class="score-main">{{item.name}} {{item.score}}/{{item.full_score}}</view>
@@ -47,18 +51,10 @@
 
     <view class="panel section">
       <view class="section-title">优先提升</view>
-      <view wx:for="{{report.priority}}" wx:key="name" class="list-item">
+      <view wx:for="{{report.priority}}" wx:key="name" class="priority-card">
         <view><text class="tag tag-amber">{{item.name}}</text></view>
         <view class="muted">{{item.reason}}</view>
         <view class="muted">{{item.action}}</view>
-      </view>
-    </view>
-
-    <view class="panel section">
-      <view class="section-title">两周计划</view>
-      <view wx:for="{{planRows}}" wx:key="number" class="workflow-item list-item">
-        <view class="workflow-index">{{item.number}}</view>
-        <view class="workflow-text">{{item.text}}</view>
       </view>
     </view>
 
@@ -73,15 +69,133 @@
     </view>
 
     <view class="panel section">
-      <view class="section-title">
-        <text>AI增强分析</text>
-        <text class="tag tag-purple">下一步</text>
+      <view class="section-title">历史趋势</view>
+      <view class="metric-row">
+        <view class="metric">
+          <view class="metric-value">{{historyRecords.length}}</view>
+          <view class="metric-label">考试次数</view>
+        </view>
+        <view class="metric">
+          <view class="metric-value">{{trendSummary.total && trendSummary.total.diff >= 0 ? '+' : ''}}{{trendSummary.total && trendSummary.total.diff || 0}}</view>
+          <view class="metric-label">总分变化</view>
+        </view>
+        <view class="metric">
+          <view class="metric-value">{{trendSummary.total && trendSummary.total.current || 0}}</view>
+          <view class="metric-label">当前总分</view>
+        </view>
       </view>
-      <view class="notice">后续可补充试卷照片、题型得分和历史成绩，用于生成更具体的失分归因与趋势判断。</view>
+      <view class="notice trend-summary-box">{{trendSummary.summary}}</view>
+      <canvas id="reportTotalTrendCanvas" type="2d" class="trend-canvas"></canvas>
+      <view class="section-subtitle">各科曲线趋势</view>
+      <view wx:for="{{subjectTrendRows}}" wx:key="subject" class="trend-row-card">
+        <view class="score-line">
+          <view>
+            <view class="score-main">{{item.subject}} {{item.current}}</view>
+            <view class="score-sub">{{item.direction}}，波动 {{item.volatility || 0}} 分</view>
+          </view>
+          <text class="tag {{item.diff >= 0 ? 'tag-green' : 'tag-amber'}}">{{item.diff >= 0 ? '+' : ''}}{{item.diff || 0}}</text>
+        </view>
+        <canvas type="2d" class="report-subject-trend-canvas"></canvas>
+      </view>
     </view>
 
     <view class="panel section">
-      <view class="muted">{{report.disclaimer}}</view>
+      <view class="section-title">教育局附录</view>
+      <view class="section-subtitle">可在这里修改城市，并复制对应教育局官网链接。</view>
+      <input class="input" value="{{city}}" bindinput="onCityInput" placeholder="例如杭州" />
+      <view class="mini-chip-row">
+        <text wx:for="{{cityOptions}}" wx:key="*this" class="mini-chip city-chip">{{item}}</text>
+      </view>
+      <view class="notice city-link-box">
+        <view class="score-main">{{city}}</view>
+        <view class="score-sub">{{educationLink || '暂未内置该城市官网链接，将按城市名搜索教育局官网。'}}</view>
+      </view>
+      <button class="secondary full-button" bindtap="copyEducationLink">复制教育局链接</button>
+    </view>
+
+    <view class="panel section">
+      <view class="section-title">
+        <text>AI增强分析</text>
+        <text wx:if="{{enhancedReport}}" class="tag tag-green">已完成</text>
+        <text wx:else class="tag tag-purple">可生成</text>
+      </view>
+      <view wx:if="{{!enhancedReport}}" class="notice">可补充学科题型得分或试卷照片。增强分析会结合基础报告、历史趋势和这些材料输出更具体的建议。</view>
+      <view wx:if="{{!enhancedReport}}" class="section-subtitle">增强分析材料</view>
+      <view wx:if="{{!enhancedReport}}" wx:for="{{materialEntries}}" wx:key="index" class="material-card">
+        <view class="material-head">
+          <view class="score-main">材料 {{index + 1}}</view>
+          <button class="secondary mini-button" data-index="{{index}}" bindtap="removeMaterialRow">删除</button>
+        </view>
+        <picker range="{{subjectOptions}}" value="{{item.subjectIndex}}" data-index="{{index}}" bindchange="onMaterialSubjectChange">
+          <view class="readonly-cell">{{item.subject}}</view>
+        </picker>
+        <textarea class="textarea material-textarea" value="{{item.detail}}" data-index="{{index}}" bindinput="onMaterialDetailInput" placeholder="例如：数学试卷，选择题12题共60分得42分；填空题4题共20分得12分；解答题-导数与函数10分得3分。" />
+        <view wx:if="{{item.imagePath}}" class="material-image-box">
+          <image class="upload-preview" mode="aspectFill" src="{{item.imagePath}}" />
+        </view>
+        <view class="upload-actions">
+          <button class="primary mini-button" data-index="{{index}}" bindtap="chooseMaterialImage">上传试卷图片</button>
+          <button wx:if="{{item.imagePath}}" class="secondary mini-button" data-index="{{index}}" bindtap="removeMaterialImage">移除图片</button>
+        </view>
+      </view>
+      <button wx:if="{{!enhancedReport}}" class="secondary full-button" bindtap="addMaterialRow">确认，并添加另一门学科</button>
+      <button wx:if="{{!enhancedReport}}" class="primary full-button" disabled="{{enhancedLoading}}" bindtap="generateEnhancedReport">{{enhancedLoading ? '生成中' : '生成 AI 增强分析'}}</button>
+
+      <view wx:if="{{enhancedReport}}" class="report-card accent">
+        <view class="score-main">{{enhancedReport.summary}}</view>
+      </view>
+      <view wx:if="{{enhancedReport}}" class="section-subtitle">整体趋势判断</view>
+      <view wx:if="{{enhancedReport}}" class="notice">{{enhancedReport.overall_trend}}</view>
+      <view wx:if="{{enhancedReport}}" class="section-subtitle">学科深度判断</view>
+      <view wx:if="{{enhancedReport}}" wx:for="{{enhancedReport.subject_insights}}" wx:key="name" class="report-card list-item">
+        <view>
+          <view class="score-line">
+            <view class="score-main">{{item.name}}</view>
+            <text class="tag tag-purple">深度诊断</text>
+          </view>
+          <view class="insight-block">
+            <view class="insight-label">趋势判断</view>
+            <view class="score-sub">{{item.trend_judgment}}</view>
+          </view>
+          <view class="insight-block">
+            <view class="insight-label">问题定位</view>
+            <view class="score-sub">{{item.diagnosis}}</view>
+          </view>
+          <view class="insight-block">
+            <view class="insight-label">判断依据</view>
+            <view class="score-sub">{{item.evidence}}</view>
+          </view>
+          <view class="insight-block">
+            <view class="insight-label">执行建议</view>
+            <view class="score-sub">{{item.action}}</view>
+          </view>
+          <view class="insight-block">
+            <view class="insight-label">下次目标</view>
+            <view class="score-sub">{{item.next_target}}</view>
+          </view>
+        </view>
+      </view>
+      <view wx:if="{{enhancedReport}}" class="section-subtitle">风险提醒</view>
+      <view wx:if="{{enhancedReport}}" wx:for="{{enhancedReport.risk_alerts}}" wx:key="index" class="warning-line">{{item}}</view>
+      <view wx:if="{{enhancedReport}}" class="section-subtitle">建议补充材料</view>
+      <view wx:if="{{enhancedReport}}" wx:for="{{enhancedReport.followup_materials}}" wx:key="index" class="plan-card">
+        <view class="workflow-index">{{index + 1}}</view>
+        <view class="workflow-text">{{item}}</view>
+      </view>
+      <view wx:if="{{enhancedReport}}" class="notice">{{enhancedReport.parent_focus}}</view>
+      <view wx:if="{{enhancedReport}}" class="notice">{{enhancedReport.elective_note}}</view>
+    </view>
+
+    <view wx:if="{{enhancedLoading}}" class="report-mask">
+      <view class="report-progress">
+        <view class="report-spinner"></view>
+        <view class="report-progress-title">正在生成增强分析</view>
+        <view class="report-progress-text">{{enhancedStatusText}}</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="footer-note">{{report.disclaimer}}</view>
     </view>
 
     <button class="secondary full-button" bindtap="goInput">重新录入</button>

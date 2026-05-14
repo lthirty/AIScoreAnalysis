@@ -1,6 +1,7 @@
 const { request } = require('../../utils/request')
 const { showError } = require('../../utils/error')
-const { getScoreDraft, setLastReport } = require('../../utils/storage')
+const { appendHistoryRecord, getScoreDraft, setLastReport } = require('../../utils/storage')
+const { calculateTotalScore } = require('../../utils/trend')
 
 const REPORT_POLL_INTERVAL_MS = 2000
 const REPORT_MAX_WAIT_MS = 90000
@@ -105,6 +106,16 @@ Page({
       this.setData({ reportStatusText: 'AI 正在生成报告，请稍候' })
       const report = await this.pollReportJob(job.job_id)
       setLastReport({ payload, report })
+      appendHistoryRecord({
+        id: `${payload.exam.date || payload.exam.name || Date.now()}-${Date.now()}`,
+        city: payload.student.city,
+        grade: payload.student.grade,
+        examName: payload.exam.name,
+        examDate: payload.exam.date,
+        totalScore: calculateTotalScore(payload.subjects),
+        subjects: payload.subjects,
+        createdAt: new Date().toISOString()
+      })
       wx.navigateTo({ url: '/pages/report/index' })
     } catch (error) {
       showError('生成失败', error)

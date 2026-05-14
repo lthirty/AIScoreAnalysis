@@ -1,7 +1,7 @@
-const { request } = require('../../utils/request')
 const { uploadScoreImage } = require('../../utils/upload')
 const { showError } = require('../../utils/error')
-const { setScoreDraft } = require('../../utils/storage')
+const { getPreferences, setPreferences, setScoreDraft } = require('../../utils/storage')
+const { parseScoreText } = require('../../utils/scoreParser')
 
 Page({
   data: {
@@ -10,6 +10,8 @@ Page({
     imageModeClass: '',
     showTextMode: true,
     showImageMode: false,
+    modeIcon: '文',
+    modeText: '适合已经有成绩文字或家长口述场景，解析后仍会进入确认页。',
     city: '杭州',
     grade: '高一',
     examName: '期中考试',
@@ -22,6 +24,14 @@ Page({
     ocrLoading: false
   },
 
+  onShow() {
+    const preferences = getPreferences()
+    this.setData({
+      city: preferences.city || this.data.city,
+      grade: preferences.grade || this.data.grade
+    })
+  },
+
   switchMode(event) {
     const mode = event.currentTarget.dataset.mode
     this.setData({
@@ -29,16 +39,24 @@ Page({
       textModeClass: mode === 'text' ? 'active' : '',
       imageModeClass: mode === 'image' ? 'active' : '',
       showTextMode: mode === 'text',
-      showImageMode: mode === 'image'
+      showImageMode: mode === 'image',
+      modeIcon: mode === 'text' ? '文' : '图',
+      modeText: mode === 'text'
+        ? '适合已经有成绩文字或家长口述场景，解析后仍会进入确认页。'
+        : '沿用原 Web 版双截图逻辑：个人成绩必填，最高分/排名图可选。'
     })
   },
 
   onCityInput(event) {
-    this.setData({ city: event.detail.value })
+    const city = event.detail.value
+    this.setData({ city })
+    this.savePreferences({ city })
   },
 
   onGradeInput(event) {
-    this.setData({ grade: event.detail.value })
+    const grade = event.detail.value
+    this.setData({ grade })
+    this.savePreferences({ grade })
   },
 
   onExamInput(event) {
@@ -47,6 +65,15 @@ Page({
 
   onTextInput(event) {
     this.setData({ text: event.detail.value })
+  },
+
+  savePreferences(nextValues) {
+    const current = getPreferences()
+    setPreferences({
+      ...current,
+      city: nextValues.city !== undefined ? nextValues.city : this.data.city,
+      grade: nextValues.grade !== undefined ? nextValues.grade : this.data.grade
+    })
   },
 
   chooseImage(event) {
@@ -90,7 +117,6 @@ Page({
     }
 
     this.setData({ ocrLoading: true })
-    wx.showLoading({ title: '识别中' })
     try {
       const myResult = await uploadScoreImage({
         filePath: this.data.myImage.path,
@@ -139,7 +165,6 @@ Page({
       showError('识别失败', error)
       console.error(error)
     } finally {
-      wx.hideLoading()
       this.setData({ ocrLoading: false })
     }
   },
@@ -152,20 +177,12 @@ Page({
 
     this.setData({ loading: true })
     try {
-      const draft = await request({
-        path: '/api/parse-score-text',
-        method: 'POST',
-        data: {
-          text: this.data.text,
-          student: {
-            city: this.data.city,
-            grade: this.data.grade
-          },
-          exam: {
-            name: this.data.examName,
-            date: new Date().toISOString().slice(0, 10)
-          }
-        }
+      const draft = parseScoreText(this.data.text, {
+        city: this.data.city,
+        grade: this.data.grade
+      }, {
+        name: this.data.examName,
+        date: new Date().toISOString().slice(0, 10)
       })
       if (!draft.subjects || !draft.subjects.length) {
         showError('未解析到成绩', {

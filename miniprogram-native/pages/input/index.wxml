@@ -20,18 +20,30 @@
       <view class="segment {{textModeClass}}" data-mode="text" bindtap="switchMode">文字录入</view>
       <view class="segment {{imageModeClass}}" data-mode="image" bindtap="switchMode">截图识别</view>
     </view>
+    <view class="mode-summary">
+      <view class="mode-icon">{{modeIcon}}</view>
+      <view class="mode-text">{{modeText}}</view>
+    </view>
   </view>
 
   <view class="panel section">
     <view class="section-title">基础信息</view>
-    <label class="label">所在城市</label>
-    <input class="input" value="{{city}}" bindinput="onCityInput" placeholder="杭州" />
+    <view class="form-grid">
+      <view class="field-card">
+        <label class="label">所在城市</label>
+        <input class="input" value="{{city}}" bindinput="onCityInput" placeholder="杭州" />
+      </view>
 
-    <label class="label">年级</label>
-    <input class="input" value="{{grade}}" bindinput="onGradeInput" placeholder="高一" />
+      <view class="field-card">
+        <label class="label">年级</label>
+        <input class="input" value="{{grade}}" bindinput="onGradeInput" placeholder="高一" />
+      </view>
 
-    <label class="label">考试名称</label>
-    <input class="input" value="{{examName}}" bindinput="onExamInput" placeholder="期中考试" />
+      <view class="field-card">
+        <label class="label">考试名称</label>
+        <input class="input" value="{{examName}}" bindinput="onExamInput" placeholder="期中考试" />
+      </view>
+    </view>
   </view>
 
   <view class="panel section" wx:if="{{showTextMode}}">
@@ -55,6 +67,7 @@
           <text class="tag tag-blue">必填</text>
         </view>
         <image wx:if="{{myImage.path}}" class="upload-preview" mode="aspectFill" src="{{myImage.path}}" />
+        <view wx:else class="upload-placeholder">选择清晰的个人成绩截图</view>
         <view class="upload-actions">
           <button class="primary mini-button" data-type="my" bindtap="chooseImage">选择图片</button>
           <button wx:if="{{myImage.path}}" class="secondary mini-button" data-type="my" bindtap="removeImage">移除</button>
@@ -70,6 +83,7 @@
           <text class="tag tag-amber">推荐</text>
         </view>
         <image wx:if="{{maxImage.path}}" class="upload-preview" mode="aspectFill" src="{{maxImage.path}}" />
+        <view wx:else class="upload-placeholder">可选：最高分、排名或对比图</view>
         <view class="upload-actions">
           <button class="primary mini-button" data-type="max" bindtap="chooseImage">选择图片</button>
           <button wx:if="{{maxImage.path}}" class="secondary mini-button" data-type="max" bindtap="removeImage">移除</button>
@@ -78,6 +92,14 @@
     </view>
 
     <button class="primary full-button" loading="{{ocrLoading}}" bindtap="recognizeImages">开始识别并确认</button>
+  </view>
+
+  <view wx:if="{{ocrLoading}}" class="report-mask">
+    <view class="report-progress">
+      <view class="report-spinner"></view>
+      <view class="report-progress-title">正在识别成绩截图</view>
+      <view class="report-progress-text">图片已上传到云存储，正在调用 OCR，请保持当前页面。</view>
+    </view>
   </view>
 
   <view class="safe-area-bottom"></view>

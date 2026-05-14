@@ -3,9 +3,9 @@ const { request } = require('./request')
 const OCR_POLL_INTERVAL_MS = 2000
 const OCR_MAX_WAIT_MS = 90000
 
-function uploadToCloud(filePath, type) {
+function uploadToCloud(filePath, type, folder = 'score-ocr') {
   const extension = filePath.toLowerCase().includes('.png') ? 'png' : 'jpg'
-  const cloudPath = `score-ocr/${Date.now()}-${Math.random().toString(36).slice(2)}-${type}.${extension}`
+  const cloudPath = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}-${type}.${extension}`
   return wx.cloud.uploadFile({
     cloudPath,
     filePath
@@ -60,4 +60,13 @@ async function uploadScoreImage({ filePath, type }) {
   return pollOcrJob(job.job_id)
 }
 
-module.exports = { uploadScoreImage }
+async function uploadFileForUrl({ filePath, type, folder = 'enhanced-materials' }) {
+  const uploadResult = await uploadToCloud(filePath, type, folder)
+  const fileUrl = await getTempFileURL(uploadResult.fileID)
+  return {
+    fileID: uploadResult.fileID,
+    fileUrl
+  }
+}
+
+module.exports = { uploadScoreImage, uploadFileForUrl }

@@ -51,11 +51,53 @@ class ScoreReport(BaseModel):
     summary: str
     subject_performance: list[SubjectPerformance]
     priority: list[PriorityItem]
-    two_week_plan: list[str]
     parent_advice: str
     elective_advice: str
     disclaimer: str = "本报告仅供学习规划参考，不构成升学、选科或教育决策承诺。"
     mock_report: bool = True
+
+
+class EnhancedSubjectInsight(BaseModel):
+    name: str
+    trend_judgment: str
+    diagnosis: str
+    evidence: str
+    action: str
+    next_target: str
+
+
+class EnhancedMaterial(BaseModel):
+    subject: str
+    input_type: str = "text"
+    detail: str = ""
+    image_url: str = ""
+    image_name: str = ""
+
+
+class HistoryExamRecord(BaseModel):
+    exam_name: str = ""
+    exam_date: str = ""
+    total_score: float = 0
+    subjects: list[SubjectScoreInput] = Field(default_factory=list)
+
+
+class EnhancedScoreReport(BaseModel):
+    summary: str
+    overall_trend: str
+    subject_insights: list[EnhancedSubjectInsight]
+    risk_alerts: list[str]
+    followup_materials: list[str]
+    parent_focus: str
+    elective_note: str
+    disclaimer: str = "增强分析基于当前成绩和已上传材料生成，不能替代试卷讲评、学校政策和教师判断。"
+    mock_report: bool = True
+
+
+class EnhancedScoreRequest(BaseModel):
+    score_input: ScoreInput
+    base_report: ScoreReport | None = None
+    history_records: list[HistoryExamRecord] = Field(default_factory=list)
+    materials: list[EnhancedMaterial] = Field(default_factory=list)
 
 
 class OcrScoreResponse(BaseModel):
@@ -97,4 +139,16 @@ class ReportJobStatusResponse(BaseModel):
     job_id: str
     status: str
     result: ScoreReport | None = None
+    error: str = ""
+
+
+class EnhancedReportJobCreateResponse(BaseModel):
+    job_id: str
+    status: str = "pending"
+
+
+class EnhancedReportJobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    result: EnhancedScoreReport | None = None
     error: str = ""

@@ -1,13 +1,14 @@
 import base64
 import json
+import re
 from typing import Any
 
 import httpx
 
 from app.config import Settings
-from app.schemas import ScoreInput, ScoreReport
+from app.schemas import EnhancedMaterial, EnhancedScoreReport, HistoryExamRecord, ScoreInput, ScoreReport
 from app.services.json_utils import extract_json_payload
-from app.services.report_generator import build_mock_report
+from app.services.report_generator import build_mock_enhanced_report, build_mock_report
 
 
 class AiConfigurationError(RuntimeError):
@@ -62,6 +63,35 @@ async def run_ai_report(*, settings: Settings, score_input: ScoreInput) -> Score
     payload = extract_json_payload(content)
     payload["mock_report"] = False
     return ScoreReport.model_validate(payload)
+
+
+async def run_enhanced_report(
+    *,
+    settings: Settings,
+    score_input: ScoreInput,
+    base_report: ScoreReport | None = None,
+    history_records: list[HistoryExamRecord] | None = None,
+    materials: list[EnhancedMaterial] | None = None,
+) -> EnhancedScoreReport:
+    if not settings.ai_enabled:
+        return build_mock_enhanced_report(score_input)
+
+    local_report = base_report or build_mock_report(score_input)
+    messages = _build_enhanced_report_messages(
+        score_input=score_input,
+        base_report=local_report,
+        history_records=history_records or [],
+        materials=materials or [],
+    )
+    data = await _chat_completion(
+        settings=settings,
+        model=settings.analyze_model,
+        messages=messages,
+    )
+    content = _extract_message_content(data)
+    payload = extract_json_payload(content)
+    payload["mock_report"] = False
+    return EnhancedScoreReport.model_validate(payload)
 
 
 async def _chat_completion(
@@ -180,9 +210,132 @@ def _build_report_prompt(score_input: ScoreInput, local_report: ScoreReport) -> 
 输出要求：
 1. 只输出 JSON，不要输出 Markdown。
 2. 不编造成绩中没有提供的题型、知识点、学校排名或政策信息。
-3. 建议必须具体到家长能执行的两周动作。
+3. 建议必须具体、克制，能让家长知道下一步该补充什么材料或如何复盘。
 4. elective_advice 不做绝对选科承诺。
 
 JSON 格式必须完全符合：
 {json.dumps(ScoreReport.model_json_schema(), ensure_ascii=False)}
 """.strip()
+
+
+def _build_enhanced_report_messages(
+    *,
+    score_input: ScoreInput,
+    base_report: ScoreReport,
+    history_records: list[HistoryExamRecord],
+    materials: list[EnhancedMaterial],
+) -> list[dict[str, Any]]:
+    history_text = _format_history_for_prompt(history_records)
+    material_text = _format_materials_for_prompt(materials)
+    content: list[dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": f"""
+你是资深学科成绩分析老师。请基于结构化成绩、基础报告、历史趋势，以及用户补充的题型材料或试卷照片，生成 AI 增强分析。
+
+输入成绩 JSON：
+{json.dumps(score_input.model_dump(), ensure_ascii=False)}
+
+基础报告 JSON：
+{json.dumps(base_report.model_dump(), ensure_ascii=False)}
+
+历史趋势：
+{history_text}
+
+增强材料：
+{material_text}
+
+输出要求：
+1. 只输出 JSON，不要输出 Markdown。
+2. 必须严格基于已提供的成绩、最高分参考、历史记录和补充材料。
+3. 如果图片或文字里没有出现具体题型、知识点、章节或题号，绝不能自行编造。
+4. 如果用户提供了像“选择题 12 题共 60 分得了 42 分”“解答题-导数与函数 10 分得了 3 分”这种材料，要明确指出哪类题型失分更集中，并给出更具体的训练建议。
+5. 每个学科判断尽量说明依据来自哪类材料：本次成绩、历史趋势、文字录入、图片可见内容。
+6. 如果增强材料已经提供了可计算的模块得分率或失分分值，请直接指出“失分最集中模块”“相对稳定模块”“优先训练顺序”，不要只停留在笼统表述。
+7. action 必须写成可执行动作，至少包含训练方式、频率或时长；next_target 必须给出下一次考试可验证的小目标。
+8. 增强分析应比基础分析更具体，尤其要回答：当前趋势、失分模块、下一步补什么材料、家长如何配合、下次目标怎么定。
+9. elective_note 不做绝对选科承诺。
+
+JSON 格式必须完全符合：
+{json.dumps(EnhancedScoreReport.model_json_schema(), ensure_ascii=False)}
+""".strip()
+        }
+    ]
+    for material in materials:
+        if material.image_url:
+            content.append({"type": "image_url", "image_url": {"url": material.image_url}})
+            content.append({
+                "type": "text",
+                "text": f"这是{material.subject}的补充图片材料，文件名：{material.image_name or '未命名'}。如未看到清晰题干或模块名，请明确说明证据不足。"
+            })
+    return [{"role": "user", "content": content}]
+
+
+def _format_history_for_prompt(history_records: list[HistoryExamRecord]) -> str:
+    if not history_records:
+        return "暂无历史成绩记录。"
+    lines = []
+    for record in history_records:
+        subject_text = ", ".join([f"{item.name}:{item.score}" for item in record.subjects]) or "无科目明细"
+        lines.append(f"{record.exam_date or '未知日期'} {record.exam_name or '未知考试'} 总分{record.total_score}；{subject_text}")
+    return "\n".join(lines)
+
+
+def _format_materials_for_prompt(materials: list[EnhancedMaterial]) -> str:
+    if not materials:
+        return "暂无增强材料。"
+    lines = []
+    for index, material in enumerate(materials, start=1):
+        module_summary = _format_extracted_modules(material.detail)
+        lines.append(
+            f"{index}. {material.subject}；输入方式：{material.input_type}；文字内容：{material.detail or '无'}；图片：{'有' if material.image_url else '无'}；结构化模块：{module_summary}"
+        )
+    return "\n".join(lines)
+
+
+def _format_extracted_modules(detail: str) -> str:
+    modules = _extract_module_scores(detail)
+    if not modules:
+        return "未提取到明确的模块分数。"
+    formatted = []
+    for module in modules:
+        formatted.append(
+            f"{module['name']} {module['score']}/{module['full_score']}，失分{module['loss']}，得分率{module['rate']}%"
+        )
+    return "；".join(formatted)
+
+
+def _extract_module_scores(detail: str) -> list[dict[str, Any]]:
+    text = (detail or "").replace("：", ":").replace("，", ",").replace("；", ";")
+    modules: list[dict[str, Any]] = []
+
+    fraction_pattern = re.compile(
+        r"(?P<name>[^,;:\n]{1,30}?)\s*(?:[:：])?\s*(?P<score>\d+(?:\.\d+)?)\s*/\s*(?P<full>\d+(?:\.\d+)?)"
+    )
+    verbose_pattern = re.compile(
+        r"(?P<name>[^,;:\n]{1,40}?)(?:（|\()?(?:[^,;:\n]*?)(?P<full>\d+(?:\.\d+)?)分(?:[^,;:\n]*?)(?:）|\))?[^,;:\n]*?(?:得了|得|拿了|拿到|获得)\s*(?P<score>\d+(?:\.\d+)?)分"
+    )
+
+    for pattern in (fraction_pattern, verbose_pattern):
+        for match in pattern.finditer(text):
+            name = match.group("name").strip(" -:：,;")
+            if not name:
+                continue
+            score = round(float(match.group("score")), 1)
+            full_score = round(float(match.group("full")), 1)
+            if full_score <= 0:
+                continue
+            loss = round(full_score - score, 1)
+            rate = round(score / full_score * 100, 1)
+            normalized = {
+                "name": name,
+                "score": score,
+                "full_score": full_score,
+                "loss": loss,
+                "rate": rate,
+            }
+            if normalized not in modules:
+                modules.append(normalized)
+
+    modules.sort(key=lambda item: (-item["loss"], item["rate"], item["name"]))
+    return modules

@@ -4,7 +4,7 @@
       <view class="hero-mark">AI</view>
       <view class="hero-copy">
         <view class="hero-title">成绩分析工作台</view>
-        <view class="hero-subtitle">把成绩变成家长能看懂、孩子能执行的两周学习计划。</view>
+        <view class="hero-subtitle">把成绩变成家长能看懂、孩子能执行的学习报告。</view>
       </view>
       <view class="status-pill">云端已连接</view>
     </view>
@@ -14,13 +14,22 @@
         <view class="metric-label">完成分析</view>
       </view>
       <view class="metric">
-        <view class="metric-value">2周</view>
-        <view class="metric-label">行动周期</view>
+        <view class="metric-value">2类</view>
+        <view class="metric-label">录入方式</view>
       </view>
       <view class="metric">
         <view class="metric-value">AI</view>
         <view class="metric-label">增强报告</view>
       </view>
+    </view>
+    <view class="hero-foot">
+      <view class="hero-foot-badge">阿里百炼</view>
+      <view class="hero-foot-main">保留原 Web 版的结构化成绩分析路径：先核对分数，再生成可执行的学习建议。</view>
+    </view>
+    <view class="mini-chip-row">
+      <text class="mini-chip">双截图识别</text>
+      <text class="mini-chip">手动录入</text>
+      <text class="mini-chip">云端 AI 报告</text>
     </view>
     <view class="stepper">
       <view class="step active">录入方式</view>
@@ -39,7 +48,7 @@
       <view class="action-card primary-card" bindtap="goInput">
         <view class="action-icon">录</view>
         <view class="action-title">录入成绩</view>
-        <view class="action-desc">上传截图或手动输入，先核对再分析。</view>
+        <view class="action-desc">上传个人成绩和班级/年段参考图，或直接文字输入。</view>
       </view>
       <view class="action-card" bindtap="goLastReport">
         <view class="action-icon">报</view>
@@ -50,7 +59,62 @@
   </view>
 
   <view class="panel section">
+    <view class="section-title">城市与教育局链接</view>
+    <view class="section-subtitle">首页先确定所在城市，后续分析和附录会沿用这个城市设置。</view>
+    <input class="input" value="{{city}}" bindinput="onCityInput" placeholder="请输入或选择城市，例如杭州" />
+    <view class="mini-chip-row">
+      <text wx:for="{{cityOptions}}" wx:key="*this" class="mini-chip city-chip" data-city="{{item}}" bindtap="onCityInputFromChip">{{item}}</text>
+    </view>
+    <view class="notice city-link-box">
+      <view class="score-main">{{city}}</view>
+      <view class="score-sub">{{educationLink || '暂未内置该城市官网链接，将按城市名搜索教育局官网。'}}</view>
+    </view>
+    <view class="button-row">
+      <button class="secondary" bindtap="saveCityPreference">保存城市</button>
+      <button class="primary" bindtap="copyEducationLink">复制链接</button>
+    </view>
+  </view>
+
+  <view class="panel section">
+    <view class="section-title">历史趋势</view>
+    <view wx:if="{{showTrendEmpty}}" class="empty-state">
+      <view class="subtitle">暂无历史成绩记录</view>
+      <view class="muted">完成至少一次分析后，会自动保存总分和各科成绩。</view>
+    </view>
+    <view wx:if="{{!showTrendEmpty}}">
+      <view class="metric-row">
+        <view class="metric">
+          <view class="metric-value">{{historyRecords.length}}</view>
+          <view class="metric-label">考试次数</view>
+        </view>
+        <view class="metric">
+          <view class="metric-value">{{trendSummary.total.diff >= 0 ? '+' : ''}}{{trendSummary.total.diff}}</view>
+          <view class="metric-label">总分变化</view>
+        </view>
+        <view class="metric">
+          <view class="metric-value">{{trendSummary.total.current}}</view>
+          <view class="metric-label">当前总分</view>
+        </view>
+      </view>
+      <view class="notice trend-summary-box">{{trendSummary.summary}}</view>
+      <canvas id="totalTrendCanvas" type="2d" class="trend-canvas"></canvas>
+      <view class="section-subtitle">各科变化情况</view>
+      <view wx:for="{{subjectTrendRows}}" wx:key="subject" class="trend-row-card">
+        <view class="score-line">
+          <view>
+            <view class="score-main">{{item.subject}} {{item.current}}</view>
+            <view class="score-sub">{{item.direction}}，波动 {{item.volatility || 0}} 分</view>
+          </view>
+          <text class="tag {{item.diff >= 0 ? 'tag-green' : 'tag-amber'}}">{{item.diff >= 0 ? '+' : ''}}{{item.diff || 0}}</text>
+        </view>
+        <canvas type="2d" class="subject-trend-canvas"></canvas>
+      </view>
+    </view>
+  </view>
+
+  <view class="panel section">
     <view class="section-title">分析流程</view>
+    <view class="section-subtitle">页面保持简短，细节放到确认页和报告页处理。</view>
     <view class="workflow">
       <view class="workflow-item">
         <view class="workflow-index">1</view>
@@ -62,7 +126,7 @@
       </view>
       <view class="workflow-item">
         <view class="workflow-index">3</view>
-        <view class="workflow-text">生成基础判断、优先学科和两周计划</view>
+        <view class="workflow-text">生成基础判断、优先学科和增强分析</view>
       </view>
     </view>
   </view>
