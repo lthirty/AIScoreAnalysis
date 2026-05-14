@@ -15,10 +15,16 @@ class Settings(BaseModel):
     ocr_model: str = "qwen-vl-max-latest"
     analyze_model: str = "qwen-max-latest"
     database_url: str | None = None
+    wx_app_id: str | None = None
+    wx_app_secret: str | None = None
 
     @property
     def ai_enabled(self) -> bool:
         return bool(self.dashscope_api_key)
+
+    @property
+    def wx_enabled(self) -> bool:
+        return bool(self.wx_app_id and self.wx_app_secret)
 
 
 @lru_cache
@@ -34,4 +40,6 @@ def get_settings() -> Settings:
         ocr_model=getenv("OCR_MODEL", "qwen-vl-max-latest"),
         analyze_model=getenv("ANALYZE_MODEL", "qwen-max-latest"),
         database_url=getenv("DATABASE_URL"),
+        wx_app_id=getenv("WX_APP_ID"),
+        wx_app_secret=getenv("WX_APP_SECRET"),
     )

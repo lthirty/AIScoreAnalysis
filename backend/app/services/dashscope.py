@@ -19,6 +19,10 @@ class AiResponseError(RuntimeError):
     pass
 
 
+RETRY_MAX_ATTEMPTS = 3
+RETRY_BASE_DELAY_SECONDS = 2
+
+
 async def run_ocr_score(
     *,
     settings: Settings,
@@ -99,21 +103,39 @@ async def _chat_completion(
     settings: Settings,
     model: str,
     messages: list[dict[str, Any]],
+    attempt: int = 1,
 ) -> dict[str, Any]:
     _ensure_api_key(settings)
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
-            settings.dashscope_endpoint,
-            headers={
-                "Authorization": f"Bearer {settings.dashscope_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={"model": model, "messages": messages, "temperature": 0.2},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                settings.dashscope_endpoint,
+                headers={
+                    "Authorization": f"Bearer {settings.dashscope_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"model": model, "messages": messages, "temperature": 0.2},
+            )
 
-    if response.status_code >= 400:
-        raise AiResponseError(f"DashScope request failed: {response.status_code} {response.text[:500]}")
-    return response.json()
+        if response.status_code >= 500:
+            raise AiResponseError(f"DashScope server error: {response.status_code} {response.text[:200]}")
+        if response.status_code >= 400:
+            raise AiResponseError(f"DashScope request failed: {response.status_code} {response.text[:500]}")
+        return response.json()
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError) as e:
+        if attempt >= RETRY_MAX_ATTEMPTS:
+            raise AiResponseError(f"DashScope connection failed after {attempt} attempts: {e}")
+        delay = RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
+        import asyncio
+        await asyncio.sleep(delay)
+        return await _chat_completion(settings=settings, model=model, messages=messages, attempt=attempt + 1)
+    except AiResponseError:
+        if attempt >= RETRY_MAX_ATTEMPTS:
+            raise
+        delay = RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
+        import asyncio
+        await asyncio.sleep(delay)
+        return await _chat_completion(settings=settings, model=model, messages=messages, attempt=attempt + 1)
 
 
 def _ensure_api_key(settings: Settings) -> None:

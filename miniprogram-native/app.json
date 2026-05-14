@@ -13,5 +13,10 @@
     "backgroundColor": "#f8fafc"
   },
   "style": "v2",
-  "sitemapLocation": "sitemap.json"
+  "sitemapLocation": "sitemap.json",
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于成绩分析和趋势追踪"
+    }
+  }
 }
