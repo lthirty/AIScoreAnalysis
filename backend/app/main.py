@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.config import get_settings
 from app.routes.analysis import router as analysis_router
 from app.routes.auth import router as auth_router
+from app.routes.exports import router as exports_router
 from app.routes.ocr import router as ocr_router
 
 settings = get_settings()
@@ -27,4 +28,5 @@ def health() -> dict[str, str | bool]:
 
 app.include_router(analysis_router)
 app.include_router(auth_router)
+app.include_router(exports_router)
 app.include_router(ocr_router)

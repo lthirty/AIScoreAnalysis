@@ -47,12 +47,59 @@ class PriorityItem(BaseModel):
     action: str
 
 
+class ScoreOverview(BaseModel):
+    total_score: float = 0
+    total_full_score: float = 0
+    average_score: float = 0
+    overall_rate: float = 0
+    reference_total_score: float | None = None
+    gap_to_reference: float | None = None
+    best_subject: str = ""
+    weakest_subject: str = ""
+
+
+class SubjectComparison(BaseModel):
+    name: str
+    score: float
+    full_score: float
+    rate: float
+    reference_score: float | None = None
+    gap_to_reference: float | None = None
+    comment: str = ""
+
+
+class ReportInsight(BaseModel):
+    name: str
+    evidence: str
+    suggestion: str
+
+
+class ElectiveOption(BaseModel):
+    combo: str
+    reason: str
+
+
+class ElectiveAdvice(BaseModel):
+    recommendation: str = ""
+    basis: str = ""
+    alternatives: list[ElectiveOption] = Field(default_factory=list)
+    actions: list[str] = Field(default_factory=list)
+    note: str = ""
+
+
 class ScoreReport(BaseModel):
     summary: str
-    subject_performance: list[SubjectPerformance]
+    overview: ScoreOverview = Field(default_factory=ScoreOverview)
+    subject_comparison: list[SubjectComparison] = Field(default_factory=list)
+    subject_performance: list[SubjectPerformance] = Field(default_factory=list)
     priority: list[PriorityItem]
+    strengths: list[ReportInsight] = Field(default_factory=list)
+    weaknesses: list[ReportInsight] = Field(default_factory=list)
+    learning_advice: list[str] = Field(default_factory=list)
+    next_goals: list[str] = Field(default_factory=list)
     parent_advice: str
     elective_advice: str
+    elective_plan: ElectiveAdvice = Field(default_factory=ElectiveAdvice)
     disclaimer: str = "本报告仅供学习规划参考，不构成升学、选科或教育决策承诺。"
     mock_report: bool = True
 
@@ -64,6 +111,10 @@ class EnhancedSubjectInsight(BaseModel):
     evidence: str
     action: str
     next_target: str
+    score_gap_analysis: str = ""
+    loss_focus: list[str] = Field(default_factory=list)
+    stable_focus: list[str] = Field(default_factory=list)
+    source_basis: list[str] = Field(default_factory=list)
 
 
 class EnhancedMaterial(BaseModel):
@@ -72,6 +123,12 @@ class EnhancedMaterial(BaseModel):
     detail: str = ""
     image_url: str = ""
     image_name: str = ""
+
+
+class ReportPdfExportRequest(BaseModel):
+    title: str = "AI成绩分析报告"
+    content: str = ""
+    filename: str = "AI成绩分析报告.pdf"
 
 
 class HistoryExamRecord(BaseModel):
@@ -85,6 +142,11 @@ class EnhancedScoreReport(BaseModel):
     summary: str
     overall_trend: str
     subject_insights: list[EnhancedSubjectInsight]
+    core_diagnosis: list[str] = Field(default_factory=list)
+    subject_gap_analysis: list[str] = Field(default_factory=list)
+    strength_breakthroughs: list[str] = Field(default_factory=list)
+    execution_plan: list[str] = Field(default_factory=list)
+    stage_goals: list[str] = Field(default_factory=list)
     risk_alerts: list[str]
     followup_materials: list[str]
     parent_focus: str

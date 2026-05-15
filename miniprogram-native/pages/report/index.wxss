@@ -1,1 +1,19 @@
+.export-actions {
+  display: flex;
+  gap: 12rpx;
+  margin: 18rpx 0 12rpx;
+}
 
+.export-actions button {
+  flex: 1;
+}
+
+.report-export-canvas {
+  position: fixed;
+  left: -99999rpx;
+  top: -99999rpx;
+  width: 1080px;
+  height: 3000px;
+  opacity: 0;
+  pointer-events: none;
+}

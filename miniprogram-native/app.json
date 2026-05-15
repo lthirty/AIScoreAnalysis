@@ -4,6 +4,7 @@
     "pages/input/index",
     "pages/confirm/index",
     "pages/report/index",
+    "pages/trend/index",
     "pages/webview/index",
     "pages/privacy/index"
   ],

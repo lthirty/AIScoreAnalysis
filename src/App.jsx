@@ -1644,13 +1644,31 @@ function FreeAnalysisCard({ analysis }) {
 
   return (
     <div className="bg-white rounded-xl shadow-md p-4 border border-indigo-100">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center">
-          <Sparkles className="text-primary" size={18} />
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 bg-primary/10 rounded-full flex items-center justify-center">
+            <Sparkles className="text-primary" size={18} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-800">AI 简要分析</h3>
+            <p className="text-xs text-gray-500">各科成绩对比</p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-semibold text-gray-800">AI 简要分析</h3>
-          <p className="text-xs text-gray-500">各科成绩对比</p>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => downloadAnalysisAsImage(analysis)}
+            className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+          >
+            图片
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadAnalysisAsPdf(analysis)}
+            className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+          >
+            PDF
+          </button>
         </div>
       </div>
 
@@ -1710,34 +1728,36 @@ function FreeAnalysisCard({ analysis }) {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="bg-success/5 rounded-xl p-3 border border-success/20">
-            <p className="text-xs font-medium text-success mb-2 flex items-center gap-1">
-              <Award size={14} /> 优势科目
-            </p>
-            <div className="space-y-1">
-              {analysis.strengths.length > 0
-                ? analysis.strengths.map(item => (
-                  <p key={item.subject} className="text-sm text-gray-700">
-                    {item.subject} <span className="text-xs text-gray-500">差{item.diff}分</span>
-                  </p>
-                ))
-                : <p className="text-xs text-gray-400">暂无</p>}
+            <div className="bg-success/5 rounded-xl p-3 border border-success/20">
+              <p className="text-xs font-medium text-success mb-2 flex items-center gap-1">
+                <Award size={14} /> 优势科目
+              </p>
+              <div className="space-y-1">
+                {analysis.strengths.length > 0
+                  ? analysis.strengths.map(item => (
+                    <div key={item.subject} className="text-sm text-gray-700">
+                      <p>{item.subject}</p>
+                      <p className="text-xs text-gray-500">{item.evidence}</p>
+                    </div>
+                  ))
+                  : <p className="text-xs text-gray-400">暂无</p>}
+              </div>
             </div>
-          </div>
-          <div className="bg-warning/5 rounded-xl p-3 border border-warning/20">
-            <p className="text-xs font-medium text-warning mb-2 flex items-center gap-1">
-              <Target size={14} /> 待提升科目
-            </p>
-            <div className="space-y-1">
-              {analysis.weaknesses.length > 0
-                ? analysis.weaknesses.map(item => (
-                  <p key={item.subject} className="text-sm text-gray-700">
-                    {item.subject} <span className="text-xs text-gray-500">差{item.diff}分</span>
-                  </p>
-                ))
-                : <p className="text-xs text-gray-400">暂无</p>}
+            <div className="bg-warning/5 rounded-xl p-3 border border-warning/20">
+              <p className="text-xs font-medium text-warning mb-2 flex items-center gap-1">
+                <Target size={14} /> 待提升科目
+              </p>
+              <div className="space-y-1">
+                {analysis.weaknesses.length > 0
+                  ? analysis.weaknesses.map(item => (
+                    <div key={item.subject} className="text-sm text-gray-700">
+                      <p>{item.subject}</p>
+                      <p className="text-xs text-gray-500">{item.evidence}</p>
+                    </div>
+                  ))
+                  : <p className="text-xs text-gray-400">暂无</p>}
+              </div>
             </div>
-          </div>
         </div>
 
         {/* Suggestions */}
@@ -1787,7 +1807,7 @@ function PremiumAnalysisCard({ analysis, onRunSubjectTrendAnalysis, onSubjectTre
           </button>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => downloadAnalysisAsPdf(analysis)}
             className="rounded-lg bg-white px-3 py-2 font-semibold text-amber-700 shadow-sm flex items-center justify-center gap-1"
           >
             <Printer size={14} /> PDF
@@ -1802,7 +1822,7 @@ function PremiumAnalysisCard({ analysis, onRunSubjectTrendAnalysis, onSubjectTre
         </div>
       </div>
       <p className="mb-4 text-xs text-amber-700">
-        付费用户可导出图片或打印保存为 PDF；手机端可保存后通过微信转发给指定联系人。浏览器网页不能直接指定微信号发送，需用户在微信内确认转发。
+        付费用户可导出图片或下载 PDF；手机端可保存后通过微信转发给指定联系人。浏览器网页不能直接指定微信号发送，需用户在微信内确认转发。
       </p>
 
       <div className="space-y-4">
@@ -2520,6 +2540,49 @@ function downloadAnalysisAsImage(analysis) {
   link.download = `AI成绩分析-${new Date().toISOString().slice(0, 10)}.png`
   link.href = canvas.toDataURL('image/png')
   link.click()
+}
+
+function base64ToBlob(base64, mimeType) {
+  const byteCharacters = atob(base64)
+  const byteNumbers = new Array(byteCharacters.length)
+  for (let index = 0; index < byteCharacters.length; index += 1) {
+    byteNumbers[index] = byteCharacters.charCodeAt(index)
+  }
+  return new Blob([new Uint8Array(byteNumbers)], { type: mimeType })
+}
+
+async function downloadAnalysisAsPdf(analysis) {
+  const text = getAnalysisExportText(analysis)
+  if (!text) return
+
+  try {
+    const response = await fetch('/api/export-report-pdf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title: 'AI成绩分析报告',
+        content: text,
+        filename: `AI成绩分析-${new Date().toISOString().slice(0, 10)}.pdf`
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`PDF导出失败: ${response.status}`)
+    }
+
+    const data = await response.json()
+    const blob = base64ToBlob(data.pdf_base64, data.mime_type || 'application/pdf')
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.download = data.download_name || data.filename || `AI成绩分析-${new Date().toISOString().slice(0, 10)}.pdf`
+    link.href = url
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch (error) {
+    console.warn('PDF export failed:', error)
+  }
 }
 
 async function shareAnalysisText(analysis) {

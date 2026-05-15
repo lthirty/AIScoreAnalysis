@@ -8,20 +8,6 @@
       </view>
       <view class="status-pill">云端已连接</view>
     </view>
-    <view class="metric-row">
-      <view class="metric">
-        <view class="metric-value">4步</view>
-        <view class="metric-label">完整流程</view>
-      </view>
-      <view class="metric">
-        <view class="metric-value">2种</view>
-        <view class="metric-label">录入方式</view>
-      </view>
-      <view class="metric">
-        <view class="metric-value">AI</view>
-        <view class="metric-label">基础+增强</view>
-      </view>
-    </view>
     <view class="inline-fold">
       <view class="section-title compact-title" bindtap="toggleAiConfigSection">
         <text>AI 模型配置（已配置完成）</text>
@@ -71,11 +57,6 @@
   </view>
 
   <view class="panel section">
-    <view class="section-title">从这里开始</view>
-    <view class="guide-card emphasis">
-      <view class="guide-title">新用户先做一次完整分析</view>
-      <view class="guide-text">录入城市、年级、考试时间和成绩，可手动修正识别的成绩，并生成AI分析和建议。</view>
-    </view>
     <view class="action-grid single-action-grid">
       <view class="action-card primary-card start-card" bindtap="goInput">
         <view class="action-icon">录</view>

@@ -268,7 +268,7 @@
 
     <canvas type="2d" id="reportExportCanvas" class="report-export-canvas"></canvas>
 
-    <button class="secondary full-button" bindtap="goInput">重新录入</button>
+    <button class="back-action-button full-button" bindtap="goInput">重新录入</button>
   </view>
 
   <view class="page-version">当前版本 {{versionLabel}}</view>

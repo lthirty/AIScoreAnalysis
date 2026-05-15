@@ -221,7 +221,8 @@ JSON 格式：
 
 def _build_report_prompt(score_input: ScoreInput, local_report: ScoreReport) -> str:
     return f"""
-你是面向家长的学习成绩分析助手。请基于结构化成绩 JSON 生成具体、克制、可执行的学习报告。
+你是资深的中高考成绩分析老师，擅长学情诊断、分差对比、选科建议和家庭执行计划。
+请基于结构化成绩 JSON 生成接近 Web 端“AI 基础分析”的完整报告，内容要比普通摘要更具体。
 
 输入成绩 JSON：
 {json.dumps(score_input.model_dump(), ensure_ascii=False)}
@@ -232,8 +233,14 @@ def _build_report_prompt(score_input: ScoreInput, local_report: ScoreReport) -> 
 输出要求：
 1. 只输出 JSON，不要输出 Markdown。
 2. 不编造成绩中没有提供的题型、知识点、学校排名或政策信息。
-3. 建议必须具体、克制，能让家长知道下一步该补充什么材料或如何复盘。
-4. elective_advice 不做绝对选科承诺。
+3. 必须填充 overview、subject_comparison、strengths、weaknesses、learning_advice、next_goals 等字段。
+4. subject_comparison 要逐科列出自己得分、满分、参考分和分差；没有参考分时 reference_score 与 gap_to_reference 可为 null。
+5. strengths 至少 1 项，weaknesses 至少 2 项；每项都要写清 evidence 和 suggestion。
+6. learning_advice 至少 4 条，必须可执行，包含复盘方式、训练频率或时间安排。
+7. next_goals 至少 2 条，必须是下一次考试可验证的小目标。
+8. elective_plan 必须直接给出 recommendation、basis、alternatives、actions 和 note；参考本地规则的方向，不能只写“需要结合政策再看”。
+9. elective_advice 用一句完整文本同步概括 elective_plan：明确推荐组合、推荐依据、其他备选组合及依据。
+10. parent_advice 面向家长，避免空话，强调如何陪孩子复盘和跟进。
 
 JSON 格式必须完全符合：
 {json.dumps(ScoreReport.model_json_schema(), ensure_ascii=False)}

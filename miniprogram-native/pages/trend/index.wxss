@@ -1,0 +1,290 @@
+.page {
+  background: #faf9f7;
+  min-height: 100vh;
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.trend-page-card {
+  background: #ffffff;
+  border-radius: 16rpx;
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.06);
+  padding: 28rpx 24rpx 32rpx;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 标题区域 */
+.trend-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.trend-title {
+  color: #2d3748;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.trend-arrow {
+  color: #a0aec0;
+  font-size: 28rpx;
+}
+
+/* 说明区域 */
+.trend-explain {
+  margin-bottom: 18rpx;
+}
+
+.trend-brief {
+  color: #718096;
+  font-size: 24rpx;
+  line-height: 1.6;
+  margin-bottom: 10rpx;
+}
+
+.trend-detail {
+  color: #718096;
+  font-size: 24rpx;
+  line-height: 1.7;
+}
+
+/* 红色提示条 */
+.trend-warn-box {
+  background: #fff5f5;
+  border-radius: 10rpx;
+  margin: 18rpx 0;
+  padding: 18rpx 20rpx;
+}
+
+.trend-warn-text {
+  color: #c53030;
+  font-size: 22rpx;
+  line-height: 1.6;
+}
+
+/* 学科输入区域 */
+.trend-subject-input-card {
+  background: #f7f7f7;
+  border-radius: 10rpx;
+  margin: 18rpx 0;
+  padding: 18rpx 20rpx;
+}
+
+.trend-subject-label {
+  color: #2d3748;
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  margin-bottom: 12rpx;
+}
+
+.trend-subject-input {
+  background: #ffffff;
+  border: 1rpx solid #e2e8f0;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  height: 76rpx;
+  padding: 0 16rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.trend-input-placeholder {
+  color: #a0aec0;
+  font-size: 24rpx;
+}
+
+/* 操作按钮行 */
+.trend-action-row {
+  display: flex;
+  gap: 12rpx;
+  margin: 18rpx 0;
+}
+
+.trend-upload-btn,
+.trend-manual-btn {
+  border-radius: 10rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: 700;
+  height: 84rpx;
+  flex: 1;
+}
+
+.trend-upload-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+}
+
+.trend-manual-btn {
+  background: #ffffff;
+  border: 1rpx solid #e2e8f0;
+  color: #4a5568;
+}
+
+.trend-btn-icon {
+  font-size: 26rpx;
+  margin-right: 8rpx;
+}
+
+/* 试卷照片上传区域 */
+.trend-upload-card {
+  background: #ffffff;
+  border-radius: 12rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+  margin: 18rpx 0;
+  padding: 24rpx 20rpx;
+}
+
+.trend-upload-title {
+  color: #2d3748;
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.trend-upload-desc {
+  color: #a0aec0;
+  font-size: 22rpx;
+  line-height: 1.5;
+  margin-bottom: 18rpx;
+}
+
+.trend-drop-zone {
+  align-items: center;
+  background: #fafafa;
+  border: 2rpx dashed #d0d0d0;
+  border-radius: 10rpx;
+  display: flex;
+  flex-direction: column;
+  height: 240rpx;
+  justify-content: center;
+}
+
+.trend-drop-icon-wrap {
+  align-items: center;
+  background: #ede9fe;
+  border-radius: 50%;
+  display: flex;
+  height: 64rpx;
+  justify-content: center;
+  margin-bottom: 14rpx;
+  width: 64rpx;
+}
+
+.trend-drop-icon {
+  color: #7c3aed;
+  font-size: 32rpx;
+}
+
+.trend-drop-main {
+  color: #718096;
+  font-size: 26rpx;
+  margin-bottom: 10rpx;
+}
+
+.trend-drop-sub {
+  display: flex;
+  gap: 24rpx;
+}
+
+.trend-drop-sub text {
+  color: #a0aec0;
+  font-size: 22rpx;
+}
+
+.trend-preview-box {
+  margin-top: 18rpx;
+  position: relative;
+}
+
+.trend-preview-img {
+  border-radius: 8rpx;
+  height: 200rpx;
+  width: 100%;
+}
+
+.trend-preview-remove {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 24rpx;
+  height: 48rpx;
+  line-height: 48rpx;
+  position: absolute;
+  right: 16rpx;
+  text-align: center;
+  top: 16rpx;
+  width: 48rpx;
+}
+
+/* 手动输入区域 */
+.trend-manual-card {
+  background: #f7f7f7;
+  border-radius: 10rpx;
+  margin: 18rpx 0;
+  padding: 20rpx;
+}
+
+.trend-manual-title {
+  color: #2d3748;
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  margin-bottom: 8rpx;
+}
+
+.trend-manual-hint {
+  color: #a0aec0;
+  font-size: 22rpx;
+  margin-bottom: 12rpx;
+}
+
+.trend-textarea {
+  background: #ffffff;
+  border: 1rpx solid #e2e8f0;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  min-height: 160rpx;
+  padding: 16rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 底部按钮 */
+.trend-bottom-row {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 24rpx;
+}
+
+.trend-confirm-btn,
+.trend-start-btn {
+  border-radius: 10rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  height: 88rpx;
+  flex: 1;
+}
+
+.trend-confirm-btn {
+  background: #fffbeb;
+  border: 1rpx solid #fbd38d;
+  color: #c05621;
+}
+
+.trend-start-btn {
+  background: linear-gradient(135deg, #f6e05e 0%, #ed8936 100%);
+  color: #3d2c00;
+}
+
+.safe-area-bottom {
+  height: 48rpx;
+}

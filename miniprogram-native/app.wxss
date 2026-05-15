@@ -392,14 +392,18 @@ page {
 
 button.primary,
 button.secondary {
-  border-radius: 8rpx;
-  font-size: 24rpx;
-  line-height: 2.65;
+  border-radius: 10rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 2.5;
   margin: 0;
-  padding: 0 20rpx;
+  min-height: 88rpx;
+  padding: 0 40rpx;
 }
 
 .full-button {
+  display: block;
+  margin-left: 0;
   margin-top: 20rpx;
   width: 100%;
 }
@@ -786,6 +790,13 @@ button.secondary {
 .sticky-action {
   box-sizing: border-box;
   padding: 4rpx 0 20rpx;
+}
+
+.back-action-button {
+  background: #ffffff;
+  border: 2rpx solid #c7d2fe;
+  color: #3730a3;
+  margin: 28rpx auto 0;
 }
 
 .score-table {

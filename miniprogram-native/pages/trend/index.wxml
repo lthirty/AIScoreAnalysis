@@ -1,0 +1,71 @@
+<view class="page">
+  <view class="trend-page-card">
+    <!-- 说明区域 -->
+    <view class="trend-header" bindtap="toggleExplainSection">
+      <text class="trend-title">各科趋势深度分析说明</text>
+      <text class="trend-arrow">{{explainExpanded ? '∧' : '∨'}}</text>
+    </view>
+    <view wx:if="{{explainExpanded}}" class="trend-explain">
+      <view class="trend-brief">默认只展示总分和各科分数曲线，不展开分题型趋势诊断。</view>
+      <view class="trend-detail">如果需要分析每门学科的真实变化原因，请导入各科试卷照片，或手动输入各科试卷里每个部分的分数和丢分情况，例如英语的选择题、填空题、判断题、作文题等。只有总分和学科总分时，系统只能判断分数曲线变化，不能准确定位题型短板。</view>
+    </view>
+
+    <!-- 红色提示条 -->
+    <view class="trend-warn-box">
+      <text class="trend-warn-text">重要：没有在图片或描述中出现的知识点，AI 不允许自行猜测；材料不足时只说明"无法判断具体失分点"。</text>
+    </view>
+
+    <!-- 学科输入区域 -->
+    <view class="trend-subject-input-card">
+      <text class="trend-subject-label">本次要分析的学科</text>
+      <input class="trend-subject-input" value="{{subjectName}}" bindinput="onSubjectInput" placeholder="选择或输入学科，例如英语" placeholder-class="trend-input-placeholder" />
+    </view>
+
+    <!-- 操作按钮 -->
+    <view class="trend-action-row">
+      <button class="trend-upload-btn" bindtap="chooseImage">
+        <text class="trend-btn-icon">↑</text>
+        <text>导入截图</text>
+      </button>
+      <button class="trend-manual-btn" bindtap="showManualInput">
+        <text class="trend-btn-icon">✎</text>
+        <text>手动输入</text>
+      </button>
+    </view>
+
+    <!-- 试卷照片上传区域 -->
+    <view class="trend-upload-card">
+      <text class="trend-upload-title">各科试卷照片</text>
+      <view class="trend-upload-desc">可导入试卷、答题卡或分题型得分截图，后续增强分析会按照题型定位短板。</view>
+      <view class="trend-drop-zone" bindtap="chooseImage">
+        <view class="trend-drop-icon-wrap">
+          <text class="trend-drop-icon">⬆</text>
+        </view>
+        <text class="trend-drop-main">点击或拖拽上传</text>
+        <view class="trend-drop-sub">
+          <text>📷 拍照</text>
+          <text>🖼 截图</text>
+        </view>
+      </view>
+      <view wx:if="{{imagePath}}" class="trend-preview-box">
+        <image class="trend-preview-img" mode="aspectFill" src="{{imagePath}}" />
+        <view class="trend-preview-remove" bindtap="removeImage">✕</view>
+      </view>
+    </view>
+
+    <!-- 手动输入区域 -->
+    <view wx:if="{{showManualInput}}" class="trend-manual-card">
+      <text class="trend-manual-title">手动输入题型得分</text>
+      <view class="trend-manual-hint">例如：选择题 12题共60分得42分；填空题 4题共20分得12分</view>
+      <textarea class="trend-textarea" value="{{manualDetail}}" bindinput="onManualDetailInput" placeholder="输入各题型的满分和得分，例如：选择题 12题共60分得42分；填空题 4题共20分得12分；解答题-导数与函数 10分得3分" />
+    </view>
+
+    <!-- 底部按钮 -->
+    <view class="trend-bottom-row">
+      <button class="trend-confirm-btn" bindtap="addAnotherSubject">确认，并添加另一门学科</button>
+      <button class="trend-start-btn" bindtap="startAnalysis">开始分析</button>
+    </view>
+  </view>
+
+  <view class="safe-area-bottom"></view>
+</view>

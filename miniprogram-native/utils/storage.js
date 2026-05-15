@@ -43,6 +43,25 @@ function appendHistoryRecord(record) {
   setHistoryRecords(next)
 }
 
+function updateHistoryRecord(recordId, updater) {
+  const next = getHistoryRecords().map((record) => {
+    if (record.id !== recordId) return record
+    const updatedRecord = typeof updater === 'function' ? updater(record) : { ...record, ...updater }
+    return {
+      ...record,
+      ...updatedRecord
+    }
+  })
+  setHistoryRecords(next)
+  return next
+}
+
+function removeHistoryRecord(recordId) {
+  const next = getHistoryRecords().filter((record) => record.id !== recordId)
+  setHistoryRecords(next)
+  return next
+}
+
 function setPreferences(value) {
   wx.setStorageSync(PREFERENCES_KEY, value)
 }
@@ -61,6 +80,8 @@ module.exports = {
   setHistoryRecords,
   getHistoryRecords,
   appendHistoryRecord,
+  updateHistoryRecord,
+  removeHistoryRecord,
   setPreferences,
   getPreferences
 }
