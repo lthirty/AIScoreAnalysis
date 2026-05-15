@@ -38,7 +38,7 @@
 
       <view class="field-card">
         <label class="label">考试名称</label>
-        <input class="input" value="{{examName}}" bindinput="onExamInput" placeholder="期中考试" />
+        <input class="input" value="{{examName}}" bindinput="onExamInput" placeholder="例如期中考试（可选）" />
       </view>
 
       <view class="field-card">
@@ -55,8 +55,8 @@
 
   <view class="panel section" wx:if="{{showTextMode}}">
     <view class="section-title">成绩描述</view>
-    <view class="notice">可以直接输入一句话，例如“高一期中考试，数学108分，英语126分，物理78分，化学82分”。</view>
-    <textarea class="textarea" value="{{text}}" bindinput="onTextInput" placeholder="例如：高一期中考试，数学108分，英语126分，物理78分，化学82分" />
+    <view class="notice">可以直接输入九门成绩，例如“语文：90，数学：95，英语：115，物理：75，化学：70，生物：85，政治：78，历史：85，地理：85”。</view>
+    <textarea class="textarea" value="{{text}}" bindinput="onTextInput" placeholder="例如：语文：90，数学：95，英语：115，物理：75，化学：70，生物：85，政治：78，历史：85，地理：85" />
     <button class="primary full-button" loading="{{loading}}" bindtap="parseScore">解析并确认</button>
   </view>
 
@@ -104,10 +104,17 @@
   <view wx:if="{{ocrLoading}}" class="report-mask">
     <view class="report-progress">
       <view class="report-spinner"></view>
-      <view class="report-progress-title">正在识别成绩截图</view>
-      <view class="report-progress-text">图片已上传到云存储，正在调用 OCR，请保持当前页面。</view>
+      <view class="report-progress-title">{{ocrProgressTitle}}</view>
+      <view class="report-progress-steps">
+        <view wx:for="{{ocrProgressSteps}}" wx:key="index" class="report-progress-step">
+          <view class="report-progress-dot {{index < ocrProgressStep ? 'done' : ''}} {{index === ocrProgressStep ? 'active' : ''}}">{{index + 1}}</view>
+          <view class="report-progress-step-text">{{item}}</view>
+        </view>
+      </view>
+      <view class="report-progress-text">{{ocrProgressText}}</view>
     </view>
   </view>
 
+  <view class="page-version">当前版本 {{versionLabel}}</view>
   <view class="safe-area-bottom"></view>
 </view>

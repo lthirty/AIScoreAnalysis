@@ -35,7 +35,7 @@
 
   <view class="panel section">
     <view class="section-title">成绩明细</view>
-    <view class="muted">{{draft.student.city}} · {{draft.student.grade}} · {{draft.exam.name}}</view>
+    <view class="muted">{{examSummary}}</view>
     <view class="warning-line">只核对真实分数。若 OCR 把班级排名、年级排名识别成分数，请在这里修正。</view>
     <view class="score-table">
       <view class="score-table-head">
@@ -69,14 +69,22 @@
   </view>
 
   <view class="sticky-action">
+    <view wx:if="{{statusNote}}" class="notice compact-notice">{{statusNote}}</view>
     <button class="primary full-button" disabled="{{loading}}" bindtap="analyze">{{loading ? '生成中' : '生成 AI 报告'}}</button>
   </view>
   <view wx:if="{{loading}}" class="report-mask">
     <view class="report-progress">
       <view class="report-spinner"></view>
-      <view class="report-progress-title">正在生成 AI 报告</view>
+      <view class="report-progress-title">{{reportProgressTitle}}</view>
+      <view class="report-progress-steps">
+        <view wx:for="{{reportProgressSteps}}" wx:key="index" class="report-progress-step">
+          <view class="report-progress-dot {{index < reportProgressStep ? 'done' : ''}} {{index === reportProgressStep ? 'active' : ''}}">{{index + 1}}</view>
+          <view class="report-progress-step-text">{{item}}</view>
+        </view>
+      </view>
       <view class="report-progress-text">{{reportStatusText}}</view>
     </view>
   </view>
+  <view class="page-version">当前版本 {{versionLabel}}</view>
   <view class="safe-area-bottom"></view>
 </view>

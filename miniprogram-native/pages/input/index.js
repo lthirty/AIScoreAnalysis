@@ -2,6 +2,7 @@ const { uploadScoreImage } = require('../../utils/upload')
 const { showError } = require('../../utils/error')
 const { getPreferences, setPreferences, setScoreDraft } = require('../../utils/storage')
 const { parseScoreText } = require('../../utils/scoreParser')
+const { VERSION_LABEL } = require('../../utils/version')
 
 Page({
   data: {
@@ -15,14 +16,25 @@ Page({
     examDate: '',
     city: '杭州',
     grade: '高一',
-    examName: '期中考试',
-    text: '高一期中考试，数学108分，英语126分，物理78分，化学82分',
+    examName: '',
+    text: '语文：90，数学：95，英语：115，物理：75，化学：70，生物：85，政治：78，历史：85，地理：85',
     myImage: {},
     maxImage: {},
     myImageClass: '',
     maxImageClass: '',
     loading: false,
-    ocrLoading: false
+    ocrLoading: false,
+    versionLabel: VERSION_LABEL,
+    ocrProgressTitle: '正在识别成绩截图',
+    ocrProgressText: '',
+    ocrProgressStep: 0,
+    ocrProgressSteps: [
+      '准备图片与连接云存储',
+      '上传个人成绩与对比截图',
+      '连接 AI 大模型',
+      'AI 处理中',
+      '结果回传并整理结构化成绩'
+    ]
   },
 
   onShow() {
@@ -115,6 +127,19 @@ Page({
     this.setData({ maxImage: {}, maxImageClass: '' })
   },
 
+  setOcrProgress(step, text) {
+    const nextPatch = {}
+    if (typeof step === 'number' && this.data.ocrProgressStep !== step) {
+      nextPatch.ocrProgressStep = step
+    }
+    if (text && this.data.ocrProgressText !== text) {
+      nextPatch.ocrProgressText = text
+    }
+    if (Object.keys(nextPatch).length) {
+      this.setData(nextPatch)
+    }
+  },
+
   async recognizeImages() {
     if (!this.data.myImage.path) {
       wx.showToast({ title: '请先导入个人成绩', icon: 'none' })
@@ -125,19 +150,28 @@ Page({
       return
     }
 
-    this.setData({ ocrLoading: true })
+    this.setData({
+      ocrLoading: true,
+      ocrProgressTitle: '正在识别成绩截图',
+      ocrProgressStep: 0,
+      ocrProgressText: '正在准备图片并连接云存储'
+    })
     try {
+      this.setOcrProgress(1, '正在上传个人成绩截图')
       const myResult = await uploadScoreImage({
         filePath: this.data.myImage.path,
         type: 'my'
       })
       let maxResult = null
       if (this.data.maxImage.path) {
+        this.setOcrProgress(1, '正在上传班级/年段参考截图')
         maxResult = await uploadScoreImage({
           filePath: this.data.maxImage.path,
           type: 'max'
         })
       }
+      this.setOcrProgress(2, '截图上传完成，正在连接 AI 大模型')
+      this.setOcrProgress(3, 'AI 正在识别并抽取各科分数')
 
       const myScore = myResult.structured_score || {}
       const maxScore = maxResult ? (maxResult.structured_score || {}) : {}
@@ -168,6 +202,7 @@ Page({
         })
         return
       }
+      this.setOcrProgress(4, '识别完成，正在整理结构化成绩并进入确认页')
       setScoreDraft(draft)
       wx.navigateTo({ url: '/pages/confirm/index' })
     } catch (error) {

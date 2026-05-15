@@ -1,0 +1,6 @@
+module.exports = {
+  VERSION: '3.0.0',
+  BUILD_DATE: '2026-05-15',
+  BUILD_NUMBER: '20260515-02',
+  VERSION_LABEL: 'v3.0.0 · 2026-05-15'
+}

@@ -4,7 +4,7 @@
       <view class="hero-mark">AI</view>
       <view class="hero-copy">
         <view class="hero-title">成绩分析工作台</view>
-        <view class="hero-subtitle">3分钟看懂成绩，5分钟生成诊断报告，快速看懂孩子成绩和提升方向。</view>
+        <view class="hero-subtitle">1分钟看懂成绩，2分钟生成报告，AI记录和分析。</view>
       </view>
       <view class="status-pill">云端已连接</view>
     </view>
@@ -28,7 +28,7 @@
         <text class="fold-toggle">{{aiConfigExpanded ? '收起' : '展开'}}</text>
       </view>
       <view wx:if="{{aiConfigExpanded}}">
-        <view class="section-subtitle">默认使用系统内置的阿里百炼。若你有自己的兼容 OpenAI 接口，也可以直接覆盖。</view>
+        <view class="section-subtitle">默认使用系统内置的阿里百炼。若您有自己的兼容 OpenAI 接口，也可以直接覆盖。</view>
         <view class="field-card">
           <text class="label">调用方式</text>
           <picker range="{{aiModeOptions}}" range-key="label" value="{{aiModeIndex}}" bindchange="onAiModeChange">
@@ -53,12 +53,12 @@
           <text class="label">兼容接口地址</text>
           <input class="input" value="{{aiConfig.endpoint}}" bindinput="onEndpointInput" placeholder="例如 https://api.openai.com/v1/chat/completions" />
           <text class="label">API Key</text>
-          <input class="input" password value="{{aiConfig.apiKey}}" bindinput="onApiKeyInput" placeholder="输入你自己的 API Key" />
+          <input class="input" password value="{{aiConfig.apiKey}}" bindinput="onApiKeyInput" placeholder="输入您自己的 API Key" />
           <text class="label">报告模型名</text>
           <input class="input" value="{{aiConfig.analyzeModel}}" bindinput="onCustomAnalyzeModelInput" placeholder="例如 gpt-4.1 / deepseek-v3" />
           <text class="label">OCR 模型名</text>
           <input class="input" value="{{aiConfig.ocrModel}}" bindinput="onCustomOcrModelInput" placeholder="例如 gpt-4.1-mini / qwen-vl-max-latest" />
-          <view class="notice">当前是按请求头覆盖后端配置。你的 Key 会保存在小程序本地缓存，不会写入代码仓库。</view>
+          <view class="notice">当前是按请求头覆盖后端配置。您的 Key 会保存在小程序本地缓存，不会写入代码仓库。</view>
         </view>
       </view>
     </view>
@@ -74,12 +74,12 @@
     <view class="section-title">从这里开始</view>
     <view class="guide-card emphasis">
       <view class="guide-title">新用户先做一次完整分析</view>
-      <view class="guide-text">录入城市、年级、考试时间和成绩。OCR 识别后你还能在确认页手动修正，再生成基础报告。</view>
+      <view class="guide-text">录入城市、年级、考试时间和成绩，可手动修正识别的成绩，并生成AI分析和建议。</view>
     </view>
     <view class="action-grid single-action-grid">
       <view class="action-card primary-card start-card" bindtap="goInput">
         <view class="action-icon">录</view>
-        <view class="action-title">录入成绩</view>
+        <view class="action-title">点击录入成绩</view>
         <view class="action-desc">支持双截图识别或文字输入。完成后进入确认页。</view>
       </view>
     </view>
@@ -155,6 +155,42 @@
         </view>
         <canvas type="2d" class="subject-trend-canvas"></canvas>
       </view>
+      <view class="section-subtitle manage-title">已录入成绩管理</view>
+      <view wx:for="{{editingHistoryRecords}}" wx:key="id" class="history-manage-card">
+        <view class="manage-head">
+          <view class="manage-meta">
+            <view class="score-main manage-title-text">{{item.examName || '未命名考试'}}</view>
+            <view class="score-sub">{{item.examDate || '未设置日期'}}</view>
+            <view class="score-sub manage-score-text">总分 {{item.totalScore}}</view>
+          </view>
+        </view>
+        <view class="manage-actions">
+          <button wx:if="{{editingRecordId !== item.id}}" class="secondary mini-button" data-id="{{item.id}}" bindtap="startEditHistoryRecord">编辑</button>
+          <button class="secondary mini-button danger-button" data-id="{{item.id}}" bindtap="deleteHistoryRecord">删除</button>
+        </view>
+        <view wx:if="{{editingRecordId === item.id}}" class="history-edit-form">
+          <view class="form-grid">
+            <view class="field-card">
+              <text class="label">考试名称</text>
+              <input class="input" value="{{item.examName}}" data-id="{{item.id}}" data-field="examName" bindinput="onHistoryRecordInput" placeholder="例如期中考试" />
+            </view>
+            <view class="field-card">
+              <text class="label">考试日期</text>
+              <input class="input" value="{{item.examDate}}" data-id="{{item.id}}" data-field="examDate" bindinput="onHistoryRecordInput" placeholder="例如2026-05-15" />
+            </view>
+          </view>
+          <view class="section-subtitle compact-manage-note">修改单科得分后会自动重算总分。</view>
+          <view wx:for="{{item.subjects}}" wx:key="index" class="score-table-row manage-score-row">
+            <input class="input" value="{{item.name}}" data-id="{{item.id}}" data-subject-index="{{index}}" data-field="name" bindinput="onHistorySubjectInput" />
+            <input class="input" type="digit" value="{{item.score}}" data-id="{{item.id}}" data-subject-index="{{index}}" data-field="score" bindinput="onHistorySubjectInput" />
+            <input class="input" type="digit" value="{{item.full_score}}" data-id="{{item.id}}" data-subject-index="{{index}}" data-field="full_score" bindinput="onHistorySubjectInput" />
+          </view>
+          <view class="button-row">
+            <button class="secondary" bindtap="cancelEditHistoryRecord">取消</button>
+            <button class="primary" data-id="{{item.id}}" bindtap="saveHistoryRecord">保存修改</button>
+          </view>
+        </view>
+      </view>
     </view>
   </view>
 
@@ -172,5 +208,6 @@
     </view>
   </view>
 
+  <view class="page-version">当前版本 {{versionLabel}}</view>
   <view class="safe-area-bottom"></view>
 </view>

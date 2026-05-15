@@ -1,7 +1,8 @@
 const { EDUCATION_DEPT_LINKS } = require('../../utils/constants')
-const { getHistoryRecords, getPreferences, setPreferences } = require('../../utils/storage')
-const { buildTrendSummary } = require('../../utils/trend')
+const { calculateTotalScore, buildTrendSummary } = require('../../utils/trend')
+const { getHistoryRecords, getPreferences, setPreferences, removeHistoryRecord, updateHistoryRecord } = require('../../utils/storage')
 const { drawLineChart } = require('../../utils/trendCanvas')
+const { VERSION_LABEL } = require('../../utils/version')
 
 const DEFAULT_CITY = '杭州'
 const DEFAULT_AI_CONFIG = {
@@ -51,10 +52,17 @@ Page({
     aiModeIndex: 0,
     aiModeLabel: AI_MODE_OPTIONS[0].label,
     analyzeModelIndex: 0,
-    ocrModelIndex: 0
+    ocrModelIndex: 0,
+    editingRecordId: '',
+    editingHistoryRecords: [],
+    versionLabel: VERSION_LABEL
   },
 
   onShow() {
+    this.refreshPageState()
+  },
+
+  refreshPageState() {
     const preferences = getPreferences()
     const city = preferences.city || DEFAULT_CITY
     const historyRecords = getHistoryRecords()
@@ -75,12 +83,23 @@ Page({
       aiModeIndex,
       aiModeLabel: AI_MODE_OPTIONS[aiModeIndex].label,
       analyzeModelIndex,
-      ocrModelIndex
+      ocrModelIndex,
+      editingHistoryRecords: this.buildEditableHistoryRecords(historyRecords)
     })
 
     if (historyRecords.length > 0 && this.data.trendExpanded) {
       wx.nextTick(() => this.renderTrendCharts())
     }
+  },
+
+  buildEditableHistoryRecords(records) {
+    return (records || []).map((record) => ({
+      ...record,
+      totalScore: record.totalScore != null ? record.totalScore : calculateTotalScore(record.subjects || []),
+      subjects: (record.subjects || []).map((subject) => ({
+        ...subject
+      }))
+    }))
   },
 
   updatePreferences(nextPatch) {
@@ -264,6 +283,81 @@ Page({
 
   goLastReport() {
     wx.navigateTo({ url: '/pages/report/index' })
+  },
+
+  startEditHistoryRecord(event) {
+    const recordId = event.currentTarget.dataset.id
+    this.setData({ editingRecordId: recordId })
+  },
+
+  cancelEditHistoryRecord() {
+    this.setData({
+      editingRecordId: '',
+      editingHistoryRecords: this.buildEditableHistoryRecords(getHistoryRecords())
+    })
+  },
+
+  onHistoryRecordInput(event) {
+    const recordId = event.currentTarget.dataset.id
+    const field = event.currentTarget.dataset.field
+    const value = event.detail.value
+    const editingHistoryRecords = this.data.editingHistoryRecords.map((record) => {
+      if (record.id !== recordId) return record
+      return {
+        ...record,
+        [field]: field === 'totalScore' ? Number(value) : value
+      }
+    })
+    this.setData({ editingHistoryRecords })
+  },
+
+  onHistorySubjectInput(event) {
+    const recordId = event.currentTarget.dataset.id
+    const subjectIndex = Number(event.currentTarget.dataset.subjectIndex)
+    const field = event.currentTarget.dataset.field
+    const value = event.detail.value
+    const editingHistoryRecords = this.data.editingHistoryRecords.map((record) => {
+      if (record.id !== recordId) return record
+      const subjects = [...(record.subjects || [])]
+      subjects[subjectIndex] = {
+        ...subjects[subjectIndex],
+        [field]: field === 'name' ? value : Number(value)
+      }
+      return {
+        ...record,
+        subjects,
+        totalScore: calculateTotalScore(subjects)
+      }
+    })
+    this.setData({ editingHistoryRecords })
+  },
+
+  saveHistoryRecord(event) {
+    const recordId = event.currentTarget.dataset.id
+    const record = this.data.editingHistoryRecords.find((item) => item.id === recordId)
+    if (!record) return
+    updateHistoryRecord(recordId, {
+      ...record,
+      totalScore: calculateTotalScore(record.subjects || [])
+    })
+    this.setData({ editingRecordId: '' })
+    this.refreshPageState()
+    wx.showToast({ title: '已更新', icon: 'success' })
+  },
+
+  deleteHistoryRecord(event) {
+    const recordId = event.currentTarget.dataset.id
+    wx.showModal({
+      title: '删除成绩记录',
+      content: '删除后，这次考试将不会再出现在历史趋势中。',
+      success: (res) => {
+        if (!res.confirm) return
+        removeHistoryRecord(recordId)
+        this.setData({ editingRecordId: '' })
+        this.refreshPageState()
+        wx.showToast({ title: '已删除', icon: 'success' })
+      }
+    })
   },
 
   goPrivacy() {
