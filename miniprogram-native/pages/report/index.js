@@ -1,8 +1,8 @@
 const { request } = require('../../utils/request')
 const { showError } = require('../../utils/error')
-const { CITIES, SUBJECTS, EDUCATION_DEPT_LINKS } = require('../../utils/constants')
+const { SUBJECTS, EDUCATION_DEPT_LINKS } = require('../../utils/constants')
 const { uploadFileForUrl } = require('../../utils/upload')
-const { getEnhancedReport, getHistoryRecords, getLastReport, getPreferences, setEnhancedReport, setPreferences } = require('../../utils/storage')
+const { getEnhancedReport, getHistoryRecords, getLastReport, getPreferences, setEnhancedReport } = require('../../utils/storage')
 const { buildTrendSummary } = require('../../utils/trend')
 const { drawLineChart } = require('../../utils/trendCanvas')
 
@@ -24,12 +24,13 @@ Page({
     hasReport: false,
     payload: null,
     report: null,
+    examSummary: '',
     historyRecords: [],
     trendSummary: null,
     subjectTrendRows: [],
+    trendExpanded: false,
     city: '杭州',
     educationLink: '',
-    cityOptions: CITIES,
     subjectOptions: SUBJECTS,
     materialEntries: [createEmptyMaterial()],
     enhancedReport: null,
@@ -44,11 +45,14 @@ Page({
     const preferences = getPreferences()
     const historyRecords = getHistoryRecords()
     const city = (last && last.payload && last.payload.student && last.payload.student.city) || preferences.city || '杭州'
+    const exam = last && last.payload ? last.payload.exam || {} : {}
+    const examSummary = [exam.date, exam.name].filter(Boolean).join(' · ')
     const trendSummary = buildTrendSummary(historyRecords)
     this.setData({
       hasReport: Boolean(last && last.report),
       payload: last ? last.payload : null,
       report,
+      examSummary,
       historyRecords,
       trendSummary,
       subjectTrendRows: trendSummary.subjects || [],
@@ -56,7 +60,7 @@ Page({
       educationLink: EDUCATION_DEPT_LINKS[city] || '',
       enhancedReport: enhanced && last && enhanced.reportKey === this.getReportKey(last) ? enhanced.report : null
     })
-    if (historyRecords.length > 0) {
+    if (historyRecords.length > 0 && this.data.trendExpanded) {
       wx.nextTick(() => this.renderTrendCharts())
     }
   },
@@ -65,41 +69,32 @@ Page({
     wx.navigateTo({ url: '/pages/input/index' })
   },
 
-  onCityInput(event) {
-    const city = event.detail.value.trim()
-    this.setData({
-      city,
-      educationLink: EDUCATION_DEPT_LINKS[city] || ''
-    })
-    const current = getPreferences()
-    setPreferences({
-      ...current,
-      city
-    })
-  },
-
-  onCityChipTap(event) {
-    const city = event.currentTarget.dataset.city
-    this.setData({
-      city,
-      educationLink: EDUCATION_DEPT_LINKS[city] || ''
-    })
-    const current = getPreferences()
-    setPreferences({
-      ...current,
-      city
-    })
-  },
-
-  copyEducationLink() {
+  openEducationLink() {
     const city = this.data.city.trim() || '杭州'
-    const link = this.data.educationLink || `https://www.baidu.com/s?wd=${encodeURIComponent(`${city} 教育局 官方网站`)}`
-    wx.setClipboardData({ data: link })
+    const link = this.data.educationLink
+    if (!link) {
+      wx.showToast({
+        title: '当前城市暂未配置教育局官网',
+        icon: 'none'
+      })
+      return
+    }
+    wx.navigateTo({
+      url: `/pages/webview/index?title=${encodeURIComponent(`${city}教育局`)}&url=${encodeURIComponent(link)}`
+    })
   },
 
   renderTrendCharts() {
     this.renderTotalTrendChart()
     this.renderSubjectTrendCharts()
+  },
+
+  toggleTrendSection() {
+    const trendExpanded = !this.data.trendExpanded
+    this.setData({ trendExpanded })
+    if (trendExpanded && this.data.historyRecords.length > 0) {
+      wx.nextTick(() => this.renderTrendCharts())
+    }
   },
 
   renderTotalTrendChart() {

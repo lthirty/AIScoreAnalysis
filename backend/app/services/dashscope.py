@@ -107,7 +107,7 @@ async def _chat_completion(
 ) -> dict[str, Any]:
     _ensure_api_key(settings)
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=90) as client:
             response = await client.post(
                 settings.dashscope_endpoint,
                 headers={

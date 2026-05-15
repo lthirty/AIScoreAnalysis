@@ -1,9 +1,10 @@
+import asyncio
 import time
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 
-from app.config import get_settings
+from app.config import build_runtime_settings, get_settings
 from app.schemas import (
     ParseScoreTextRequest,
     EnhancedReportJobCreateResponse,
@@ -15,12 +16,30 @@ from app.schemas import (
     ScoreReport,
 )
 from app.services.dashscope import AiResponseError, run_ai_report, run_enhanced_report
+from app.services.report_generator import build_mock_enhanced_report, build_mock_report
 from app.services.score_parser import parse_score_text
 
 router = APIRouter(prefix="/api", tags=["analysis"])
 REPORT_JOBS: dict[str, dict] = {}
 ENHANCED_REPORT_JOBS: dict[str, dict] = {}
+RUNNING_TASKS: dict[str, asyncio.Task] = {}
 JOB_TTL_SECONDS = 20 * 60
+
+
+def resolve_runtime_settings(
+    *,
+    api_key: str | None,
+    endpoint: str | None,
+    ocr_model: str | None,
+    analyze_model: str | None,
+):
+    return build_runtime_settings(
+        get_settings(),
+        api_key=api_key,
+        endpoint=endpoint,
+        ocr_model=ocr_model,
+        analyze_model=analyze_model,
+    )
 
 
 @router.post("/parse-score-text", response_model=ScoreInput)
@@ -29,9 +48,21 @@ def parse_score_text_endpoint(payload: ParseScoreTextRequest) -> ScoreInput:
 
 
 @router.post("/analyze-score", response_model=ScoreReport)
-async def analyze_score_endpoint(payload: ScoreInput) -> ScoreReport:
+async def analyze_score_endpoint(
+    payload: ScoreInput,
+    x_ai_api_key: str | None = Header(default=None),
+    x_ai_endpoint: str | None = Header(default=None),
+    x_ai_ocr_model: str | None = Header(default=None),
+    x_ai_analyze_model: str | None = Header(default=None),
+) -> ScoreReport:
     try:
-        return await run_ai_report(settings=get_settings(), score_input=payload)
+        settings = resolve_runtime_settings(
+            api_key=x_ai_api_key,
+            endpoint=x_ai_endpoint,
+            ocr_model=x_ai_ocr_model,
+            analyze_model=x_ai_analyze_model,
+        )
+        return await run_ai_report(settings=settings, score_input=payload)
     except (AiResponseError, ValueError) as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
 
@@ -39,7 +70,10 @@ async def analyze_score_endpoint(payload: ScoreInput) -> ScoreReport:
 @router.post("/analyze-score-job", response_model=ReportJobCreateResponse)
 async def create_analyze_score_job(
     payload: ScoreInput,
-    background_tasks: BackgroundTasks,
+    x_ai_api_key: str | None = Header(default=None),
+    x_ai_endpoint: str | None = Header(default=None),
+    x_ai_ocr_model: str | None = Header(default=None),
+    x_ai_analyze_model: str | None = Header(default=None),
 ) -> ReportJobCreateResponse:
     cleanup_jobs()
     job_id = uuid4().hex
@@ -49,7 +83,15 @@ async def create_analyze_score_job(
         "result": None,
         "error": "",
     }
-    background_tasks.add_task(run_report_job, job_id, payload)
+    settings = resolve_runtime_settings(
+        api_key=x_ai_api_key,
+        endpoint=x_ai_endpoint,
+        ocr_model=x_ai_ocr_model,
+        analyze_model=x_ai_analyze_model,
+    )
+    task = asyncio.create_task(run_report_job(job_id, payload, settings))
+    RUNNING_TASKS[job_id] = task
+    task.add_done_callback(lambda _: RUNNING_TASKS.pop(job_id, None))
     return ReportJobCreateResponse(job_id=job_id)
 
 
@@ -70,7 +112,10 @@ async def get_analyze_score_job(job_id: str) -> ReportJobStatusResponse:
 @router.post("/enhance-score-job", response_model=EnhancedReportJobCreateResponse)
 async def create_enhance_score_job(
     payload: EnhancedScoreRequest,
-    background_tasks: BackgroundTasks,
+    x_ai_api_key: str | None = Header(default=None),
+    x_ai_endpoint: str | None = Header(default=None),
+    x_ai_ocr_model: str | None = Header(default=None),
+    x_ai_analyze_model: str | None = Header(default=None),
 ) -> EnhancedReportJobCreateResponse:
     cleanup_jobs()
     job_id = uuid4().hex
@@ -80,7 +125,15 @@ async def create_enhance_score_job(
         "result": None,
         "error": "",
     }
-    background_tasks.add_task(run_enhanced_report_job, job_id, payload)
+    settings = resolve_runtime_settings(
+        api_key=x_ai_api_key,
+        endpoint=x_ai_endpoint,
+        ocr_model=x_ai_ocr_model,
+        analyze_model=x_ai_analyze_model,
+    )
+    task = asyncio.create_task(run_enhanced_report_job(job_id, payload, settings))
+    RUNNING_TASKS[job_id] = task
+    task.add_done_callback(lambda _: RUNNING_TASKS.pop(job_id, None))
     return EnhancedReportJobCreateResponse(job_id=job_id)
 
 
@@ -98,21 +151,22 @@ async def get_enhance_score_job(job_id: str) -> EnhancedReportJobStatusResponse:
     )
 
 
-async def run_report_job(job_id: str, payload: ScoreInput) -> None:
+async def run_report_job(job_id: str, payload: ScoreInput, settings) -> None:
     REPORT_JOBS[job_id]["status"] = "running"
     try:
-        REPORT_JOBS[job_id]["result"] = await run_ai_report(settings=get_settings(), score_input=payload)
+        REPORT_JOBS[job_id]["result"] = await run_ai_report(settings=settings, score_input=payload)
         REPORT_JOBS[job_id]["status"] = "done"
     except Exception as error:
         REPORT_JOBS[job_id]["error"] = str(error)
-        REPORT_JOBS[job_id]["status"] = "failed"
+        REPORT_JOBS[job_id]["result"] = build_mock_report(payload)
+        REPORT_JOBS[job_id]["status"] = "done"
 
 
-async def run_enhanced_report_job(job_id: str, payload: EnhancedScoreRequest) -> None:
+async def run_enhanced_report_job(job_id: str, payload: EnhancedScoreRequest, settings) -> None:
     ENHANCED_REPORT_JOBS[job_id]["status"] = "running"
     try:
         ENHANCED_REPORT_JOBS[job_id]["result"] = await run_enhanced_report(
-            settings=get_settings(),
+            settings=settings,
             score_input=payload.score_input,
             base_report=payload.base_report,
             history_records=payload.history_records,
@@ -121,7 +175,8 @@ async def run_enhanced_report_job(job_id: str, payload: EnhancedScoreRequest) ->
         ENHANCED_REPORT_JOBS[job_id]["status"] = "done"
     except Exception as error:
         ENHANCED_REPORT_JOBS[job_id]["error"] = str(error)
-        ENHANCED_REPORT_JOBS[job_id]["status"] = "failed"
+        ENHANCED_REPORT_JOBS[job_id]["result"] = build_mock_enhanced_report(payload.score_input)
+        ENHANCED_REPORT_JOBS[job_id]["status"] = "done"
 
 
 def cleanup_jobs() -> None:

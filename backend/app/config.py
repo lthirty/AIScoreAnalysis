@@ -27,6 +27,28 @@ class Settings(BaseModel):
         return bool(self.wx_app_id and self.wx_app_secret)
 
 
+def build_runtime_settings(
+    settings: Settings,
+    *,
+    api_key: str | None = None,
+    endpoint: str | None = None,
+    ocr_model: str | None = None,
+    analyze_model: str | None = None,
+) -> Settings:
+    updates: dict[str, str] = {}
+    if api_key:
+        updates["dashscope_api_key"] = api_key
+    if endpoint:
+        updates["dashscope_endpoint"] = endpoint
+    if ocr_model:
+        updates["ocr_model"] = ocr_model
+    if analyze_model:
+        updates["analyze_model"] = analyze_model
+    if not updates:
+        return settings
+    return settings.model_copy(update=updates)
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings(

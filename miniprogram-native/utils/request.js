@@ -1,6 +1,21 @@
 const { useCloudContainer, cloudEnv, cloudService, cloudResourceAppid, publicBaseUrl, localBaseUrl } = require('./config')
+const { getPreferences } = require('./storage')
+
+function buildAiHeaders() {
+  const preferences = getPreferences()
+  const aiConfig = preferences.aiConfig || {}
+  const headers = {}
+
+  if (aiConfig.endpoint) headers['X-AI-ENDPOINT'] = aiConfig.endpoint
+  if (aiConfig.apiKey) headers['X-AI-API-KEY'] = aiConfig.apiKey
+  if (aiConfig.analyzeModel) headers['X-AI-ANALYZE-MODEL'] = aiConfig.analyzeModel
+  if (aiConfig.ocrModel) headers['X-AI-OCR-MODEL'] = aiConfig.ocrModel
+
+  return headers
+}
 
 function request({ path, method = 'GET', data = {}, header = {} }) {
+  const aiHeaders = buildAiHeaders()
   if (useCloudContainer) {
     const config = cloudResourceAppid
       ? { env: cloudEnv, resourceAppid: cloudResourceAppid }
@@ -14,6 +29,7 @@ function request({ path, method = 'GET', data = {}, header = {} }) {
       header: {
         'X-WX-SERVICE': cloudService,
         'content-type': 'application/json',
+        ...aiHeaders,
         ...header
       }
     }).then((res) => {
@@ -27,7 +43,16 @@ function request({ path, method = 'GET', data = {}, header = {} }) {
     })
   }
 
-  return requestByUrl({ baseUrl: publicBaseUrl || localBaseUrl, path, method, data, header })
+  return requestByUrl({
+    baseUrl: publicBaseUrl || localBaseUrl,
+    path,
+    method,
+    data,
+    header: {
+      ...aiHeaders,
+      ...header
+    }
+  })
 }
 
 function requestByUrl({ baseUrl, path, method = 'GET', data = {}, header = {} }) {

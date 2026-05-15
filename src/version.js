@@ -3,11 +3,24 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '2.0.0';
-export const BUILD_DATE = '2026-05-14';
-export const BUILD_NUMBER = '20260514-01';
+export const VERSION = '2.0.1';
+export const BUILD_DATE = '2026-05-15';
+export const BUILD_NUMBER = '20260515-01';
 
 export const CHANGELOG = [
+  {
+    version: '2.0.1',
+    date: '2026-05-15',
+    author: 'Codex',
+    changes: [
+      '优化微信小程序首页引导文案，突出3分钟看懂成绩和5分钟生成诊断报告',
+      '强化录入成绩入口的视觉权重，改为单列高亮主入口',
+      'AI模型配置默认收缩并显示系统默认：阿里百炼，支持按请求覆盖模型和API配置',
+      '使用流程、历史趋势改为可点击首行展开/收缩，历史趋势默认收缩并承载最近报告入口',
+      '新增教育局官网web-view直达页和复制网址能力',
+      '后端分析和OCR接口支持运行时模型/API配置覆盖，并对AI报告生成失败提供规则报告兜底'
+    ]
+  },
   {
     version: '2.0.0',
     date: '2026-05-14',

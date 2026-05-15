@@ -160,6 +160,11 @@ page {
   margin-bottom: 16rpx;
 }
 
+.compact-title {
+  font-size: 28rpx;
+  margin-bottom: 0;
+}
+
 .section-subtitle {
   color: #64748b;
   font-size: 24rpx;
@@ -179,6 +184,10 @@ page {
   grid-template-columns: repeat(2, 1fr);
 }
 
+.single-action-grid {
+  grid-template-columns: 1fr;
+}
+
 .action-card {
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   border: 1rpx solid #dbe4ee;
@@ -187,8 +196,29 @@ page {
 }
 
 .action-card.primary-card {
-  background: linear-gradient(135deg, #eef4ff 0%, #ffffff 100%);
-  border-color: #b7ccff;
+  background: linear-gradient(135deg, #eef4ff 0%, #dbeafe 46%, #ffffff 100%);
+  border-color: #6ea8ff;
+  box-shadow: 0 16rpx 36rpx rgba(37, 99, 235, 0.16);
+}
+
+.start-card {
+  border-width: 2rpx;
+  min-height: 176rpx;
+}
+
+.start-card .action-title {
+  color: #1d4ed8;
+  font-size: 36rpx;
+}
+
+.start-card .action-desc {
+  color: #334155;
+  font-size: 26rpx;
+}
+
+.start-card .action-icon {
+  height: 68rpx;
+  width: 68rpx;
 }
 
 .action-icon {
@@ -217,6 +247,17 @@ page {
   font-size: 24rpx;
   line-height: 1.5;
   margin-top: 8rpx;
+}
+
+.recent-report-entry {
+  align-items: center;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border: 1rpx solid #dbe4ee;
+  border-radius: 8rpx;
+  display: flex;
+  gap: 18rpx;
+  margin-bottom: 18rpx;
+  padding: 20rpx;
 }
 
 .workflow {
@@ -249,6 +290,40 @@ page {
   flex: 1;
   font-size: 26rpx;
   line-height: 1.5;
+}
+
+.guide-card {
+  background: #f8fafc;
+  border: 1rpx solid #e2e8f0;
+  border-radius: 8rpx;
+  margin-bottom: 18rpx;
+  padding: 20rpx;
+}
+
+.guide-card.emphasis {
+  background: linear-gradient(135deg, #eef4ff 0%, #ffffff 100%);
+  border-color: #bfdbfe;
+}
+
+.guide-title {
+  color: #111827;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.guide-text {
+  color: #64748b;
+  font-size: 24rpx;
+  line-height: 1.6;
+  margin-top: 8rpx;
+}
+
+.inline-fold {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1rpx solid #e2e8f0;
+  border-radius: 8rpx;
+  margin-top: 18rpx;
+  padding: 18rpx;
 }
 
 .segmented {
@@ -715,6 +790,26 @@ button.secondary {
 .city-link-box,
 .trend-summary-box {
   margin-top: 18rpx;
+}
+
+.appendix-panel {
+  margin-top: 10rpx;
+}
+
+.fold-toggle {
+  color: #4f46e5;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.custom-api-box {
+  margin-top: 18rpx;
+}
+
+.privacy-inline {
+  display: block;
+  margin-top: 18rpx;
+  text-align: right;
 }
 
 .trend-canvas {

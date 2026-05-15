@@ -1,0 +1,7 @@
+<view class="page">
+  <web-view wx:if="{{url}}" src="{{url}}"></web-view>
+  <view wx:else class="empty-state">
+    <view class="title">无法打开页面</view>
+    <view class="subtitle">当前没有可用的教育局链接。</view>
+  </view>
+</view>

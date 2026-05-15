@@ -3,9 +3,9 @@ import time
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, Header, HTTPException, UploadFile
 
-from app.config import get_settings
+from app.config import build_runtime_settings, get_settings
 from app.schemas import (
     OcrScoreBase64Request,
     OcrScoreFileRequest,
@@ -20,6 +20,22 @@ OCR_JOBS: dict[str, dict] = {}
 JOB_TTL_SECONDS = 20 * 60
 
 
+def resolve_runtime_settings(
+    *,
+    api_key: str | None,
+    endpoint: str | None,
+    ocr_model: str | None,
+    analyze_model: str | None,
+):
+    return build_runtime_settings(
+        get_settings(),
+        api_key=api_key,
+        endpoint=endpoint,
+        ocr_model=ocr_model,
+        analyze_model=analyze_model,
+    )
+
+
 async def download_image(url: str) -> tuple[bytes, str]:
     async with httpx.AsyncClient(timeout=30) as client:
         response = await client.get(url)
@@ -31,8 +47,17 @@ async def download_image(url: str) -> tuple[bytes, str]:
 async def ocr_score_endpoint(
     file: UploadFile = File(...),
     type: str = Form(default="my"),
+    x_ai_api_key: str | None = Header(default=None),
+    x_ai_endpoint: str | None = Header(default=None),
+    x_ai_ocr_model: str | None = Header(default=None),
+    x_ai_analyze_model: str | None = Header(default=None),
 ) -> OcrScoreResponse:
-    settings = get_settings()
+    settings = resolve_runtime_settings(
+        api_key=x_ai_api_key,
+        endpoint=x_ai_endpoint,
+        ocr_model=x_ai_ocr_model,
+        analyze_model=x_ai_analyze_model,
+    )
     try:
         payload = await run_ocr_score(
             settings=settings,
@@ -48,8 +73,19 @@ async def ocr_score_endpoint(
 
 
 @router.post("/ocr-score-base64", response_model=OcrScoreResponse)
-async def ocr_score_base64_endpoint(payload: OcrScoreBase64Request) -> OcrScoreResponse:
-    settings = get_settings()
+async def ocr_score_base64_endpoint(
+    payload: OcrScoreBase64Request,
+    x_ai_api_key: str | None = Header(default=None),
+    x_ai_endpoint: str | None = Header(default=None),
+    x_ai_ocr_model: str | None = Header(default=None),
+    x_ai_analyze_model: str | None = Header(default=None),
+) -> OcrScoreResponse:
+    settings = resolve_runtime_settings(
+        api_key=x_ai_api_key,
+        endpoint=x_ai_endpoint,
+        ocr_model=x_ai_ocr_model,
+        analyze_model=x_ai_analyze_model,
+    )
     try:
         image_base64 = payload.image_base64
         if "," in image_base64:
@@ -68,8 +104,19 @@ async def ocr_score_base64_endpoint(payload: OcrScoreBase64Request) -> OcrScoreR
 
 
 @router.post("/ocr-score-file", response_model=OcrScoreResponse)
-async def ocr_score_file_endpoint(payload: OcrScoreFileRequest) -> OcrScoreResponse:
-    settings = get_settings()
+async def ocr_score_file_endpoint(
+    payload: OcrScoreFileRequest,
+    x_ai_api_key: str | None = Header(default=None),
+    x_ai_endpoint: str | None = Header(default=None),
+    x_ai_ocr_model: str | None = Header(default=None),
+    x_ai_analyze_model: str | None = Header(default=None),
+) -> OcrScoreResponse:
+    settings = resolve_runtime_settings(
+        api_key=x_ai_api_key,
+        endpoint=x_ai_endpoint,
+        ocr_model=x_ai_ocr_model,
+        analyze_model=x_ai_analyze_model,
+    )
     try:
         file_bytes, mime_type = await download_image(payload.file_url)
         result = await run_ocr_score(
@@ -93,6 +140,10 @@ async def ocr_score_file_endpoint(payload: OcrScoreFileRequest) -> OcrScoreRespo
 async def create_ocr_score_job(
     payload: OcrScoreFileRequest,
     background_tasks: BackgroundTasks,
+    x_ai_api_key: str | None = Header(default=None),
+    x_ai_endpoint: str | None = Header(default=None),
+    x_ai_ocr_model: str | None = Header(default=None),
+    x_ai_analyze_model: str | None = Header(default=None),
 ) -> OcrScoreJobCreateResponse:
     cleanup_jobs()
     job_id = uuid4().hex
@@ -102,7 +153,13 @@ async def create_ocr_score_job(
         "result": None,
         "error": "",
     }
-    background_tasks.add_task(run_ocr_job, job_id, payload.file_url, payload.type or "my")
+    settings = resolve_runtime_settings(
+        api_key=x_ai_api_key,
+        endpoint=x_ai_endpoint,
+        ocr_model=x_ai_ocr_model,
+        analyze_model=x_ai_analyze_model,
+    )
+    background_tasks.add_task(run_ocr_job, job_id, payload.file_url, payload.type or "my", settings)
     return OcrScoreJobCreateResponse(job_id=job_id)
 
 
@@ -120,8 +177,7 @@ async def get_ocr_score_job(job_id: str) -> OcrScoreJobStatusResponse:
     )
 
 
-async def run_ocr_job(job_id: str, file_url: str, score_type: str) -> None:
-    settings = get_settings()
+async def run_ocr_job(job_id: str, file_url: str, score_type: str, settings) -> None:
     OCR_JOBS[job_id]["status"] = "running"
     try:
         file_bytes, mime_type = await download_image(file_url)

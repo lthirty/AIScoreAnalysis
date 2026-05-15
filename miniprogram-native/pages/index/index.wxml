@@ -4,32 +4,63 @@
       <view class="hero-mark">AI</view>
       <view class="hero-copy">
         <view class="hero-title">成绩分析工作台</view>
-        <view class="hero-subtitle">把成绩变成家长能看懂、孩子能执行的学习报告。</view>
+        <view class="hero-subtitle">3分钟看懂成绩，5分钟生成诊断报告，快速看懂孩子成绩和提升方向。</view>
       </view>
       <view class="status-pill">云端已连接</view>
     </view>
     <view class="metric-row">
       <view class="metric">
-        <view class="metric-value">3步</view>
-        <view class="metric-label">完成分析</view>
+        <view class="metric-value">4步</view>
+        <view class="metric-label">完整流程</view>
       </view>
       <view class="metric">
-        <view class="metric-value">2类</view>
+        <view class="metric-value">2种</view>
         <view class="metric-label">录入方式</view>
       </view>
       <view class="metric">
         <view class="metric-value">AI</view>
-        <view class="metric-label">增强报告</view>
+        <view class="metric-label">基础+增强</view>
       </view>
     </view>
-    <view class="hero-foot">
-      <view class="hero-foot-badge">阿里百炼</view>
-      <view class="hero-foot-main">保留原 Web 版的结构化成绩分析路径：先核对分数，再生成可执行的学习建议。</view>
-    </view>
-    <view class="mini-chip-row">
-      <text class="mini-chip">双截图识别</text>
-      <text class="mini-chip">手动录入</text>
-      <text class="mini-chip">云端 AI 报告</text>
+    <view class="inline-fold">
+      <view class="section-title compact-title" bindtap="toggleAiConfigSection">
+        <text>AI 模型配置（已配置完成）</text>
+        <text class="fold-toggle">{{aiConfigExpanded ? '收起' : '展开'}}</text>
+      </view>
+      <view wx:if="{{aiConfigExpanded}}">
+        <view class="section-subtitle">默认使用系统内置的阿里百炼。若你有自己的兼容 OpenAI 接口，也可以直接覆盖。</view>
+        <view class="field-card">
+          <text class="label">调用方式</text>
+          <picker range="{{aiModeOptions}}" range-key="label" value="{{aiModeIndex}}" bindchange="onAiModeChange">
+            <view class="picker-display">{{aiModeLabel}}</view>
+          </picker>
+        </view>
+        <view class="form-grid" wx:if="{{aiConfig.mode === 'platform'}}">
+          <view class="field-card">
+            <text class="label">报告模型</text>
+            <picker range="{{analyzeModelOptions}}" value="{{analyzeModelIndex}}" bindchange="onAnalyzeModelChange">
+              <view class="picker-display">{{aiConfig.analyzeModel}}</view>
+            </picker>
+          </view>
+          <view class="field-card">
+            <text class="label">OCR 模型</text>
+            <picker range="{{ocrModelOptions}}" value="{{ocrModelIndex}}" bindchange="onOcrModelChange">
+              <view class="picker-display">{{aiConfig.ocrModel}}</view>
+            </picker>
+          </view>
+        </view>
+        <view wx:if="{{aiConfig.mode === 'custom'}}" class="custom-api-box">
+          <text class="label">兼容接口地址</text>
+          <input class="input" value="{{aiConfig.endpoint}}" bindinput="onEndpointInput" placeholder="例如 https://api.openai.com/v1/chat/completions" />
+          <text class="label">API Key</text>
+          <input class="input" password value="{{aiConfig.apiKey}}" bindinput="onApiKeyInput" placeholder="输入你自己的 API Key" />
+          <text class="label">报告模型名</text>
+          <input class="input" value="{{aiConfig.analyzeModel}}" bindinput="onCustomAnalyzeModelInput" placeholder="例如 gpt-4.1 / deepseek-v3" />
+          <text class="label">OCR 模型名</text>
+          <input class="input" value="{{aiConfig.ocrModel}}" bindinput="onCustomOcrModelInput" placeholder="例如 gpt-4.1-mini / qwen-vl-max-latest" />
+          <view class="notice">当前是按请求头覆盖后端配置。你的 Key 会保存在小程序本地缓存，不会写入代码仓库。</view>
+        </view>
+      </view>
     </view>
     <view class="stepper">
       <view class="step active">录入方式</view>
@@ -39,33 +70,64 @@
     </view>
   </view>
 
-  <view class="section">
-    <view class="section-title">
-      <text>开始分析</text>
-      <text class="section-link" bindtap="goPrivacy">隐私说明</text>
+  <view class="panel section">
+    <view class="section-title">从这里开始</view>
+    <view class="guide-card emphasis">
+      <view class="guide-title">新用户先做一次完整分析</view>
+      <view class="guide-text">录入城市、年级、考试时间和成绩。OCR 识别后你还能在确认页手动修正，再生成基础报告。</view>
     </view>
-    <view class="action-grid">
-      <view class="action-card primary-card" bindtap="goInput">
+    <view class="action-grid single-action-grid">
+      <view class="action-card primary-card start-card" bindtap="goInput">
         <view class="action-icon">录</view>
         <view class="action-title">录入成绩</view>
-        <view class="action-desc">上传个人成绩和班级/年段参考图，或直接文字输入。</view>
+        <view class="action-desc">支持双截图识别或文字输入。完成后进入确认页。</view>
       </view>
-      <view class="action-card" bindtap="goLastReport">
-        <view class="action-icon">报</view>
-        <view class="action-title">最近报告</view>
-        <view class="action-desc">继续查看上一次分析结果。</view>
+    </view>
+    <view class="inline-fold">
+      <view class="section-title compact-title" bindtap="toggleWorkflowSection">
+        <text>使用流程</text>
+        <text class="fold-toggle">{{workflowExpanded ? '收起' : '展开'}}</text>
+      </view>
+      <view wx:if="{{workflowExpanded}}" class="workflow">
+        <view class="workflow-item">
+          <view class="workflow-index">1</view>
+          <view class="workflow-text">选择截图识别或手动输入，填写年级和考试时间。</view>
+        </view>
+        <view class="workflow-item">
+          <view class="workflow-index">2</view>
+          <view class="workflow-text">进入确认页核对各科得分、满分和排名，纠正 OCR 偏差。</view>
+        </view>
+        <view class="workflow-item">
+          <view class="workflow-index">3</view>
+          <view class="workflow-text">先拿到基础分析：总分判断、优先学科、家长建议和选科提示。</view>
+        </view>
+        <view class="workflow-item">
+          <view class="workflow-index">4</view>
+          <view class="workflow-text">如果要更细，继续上传试卷或输入题型得分，生成增强分析。</view>
+        </view>
+        <view class="section-link privacy-inline" bindtap="goPrivacy">查看隐私说明</view>
       </view>
     </view>
   </view>
 
-  
   <view class="panel section">
-    <view class="section-title">历史趋势</view>
-    <view wx:if="{{showTrendEmpty}}" class="empty-state">
+    <view class="section-title" bindtap="toggleTrendSection">
+      <text>历史趋势（展开查看更多信息）</text>
+      <text class="fold-toggle">{{trendExpanded ? '收起' : '展开'}}</text>
+    </view>
+    <view class="section-subtitle">默认折叠。完成至少一次分析后，这里会记录总分和各科走势。</view>
+    <view class="recent-report-entry" bindtap="goLastReport">
+      <view class="action-icon">报</view>
+      <view>
+        <view class="action-title">最近报告</view>
+        <view class="action-desc">继续查看上一次基础分析和增强分析结果。</view>
+      </view>
+    </view>
+    <view wx:if="{{trendExpanded && showTrendEmpty}}" class="empty-state">
       <view class="subtitle">暂无历史成绩记录</view>
       <view class="muted">完成至少一次分析后，会自动保存总分和各科成绩。</view>
     </view>
-    <view wx:if="{{!showTrendEmpty}}">
+    <view wx:if="{{trendExpanded && !showTrendEmpty}}">
       <view class="metric-row">
         <view class="metric">
           <view class="metric-value">{{historyRecords.length}}</view>
@@ -96,22 +158,17 @@
     </view>
   </view>
 
-  <view class="panel section">
-    <view class="section-title">分析流程</view>
-    <view class="section-subtitle">页面保持简短，细节放到确认页和报告页处理。</view>
-    <view class="workflow">
-      <view class="workflow-item">
-        <view class="workflow-index">1</view>
-        <view class="workflow-text">录入年级、考试时间与各科成绩</view>
-      </view>
-      <view class="workflow-item">
-        <view class="workflow-index">2</view>
-        <view class="workflow-text">核对结构化成绩，避免排名与分数混淆</view>
-      </view>
-      <view class="workflow-item">
-        <view class="workflow-index">3</view>
-        <view class="workflow-text">生成基础判断、优先学科和增强分析</view>
-      </view>
+  <view class="panel section appendix-panel">
+    <view class="section-title">附录：城市与教育局</view>
+    <view class="section-subtitle">这里不会影响主流程。用于保存常用城市并快速打开或复制对应教育局官网。</view>
+    <input class="input" value="{{city}}" bindinput="onCityInput" placeholder="例如杭州" />
+    <view class="notice city-link-box">
+      <view class="score-main">{{city}}</view>
+      <view class="score-sub">{{educationLink || '当前城市暂未配置教育局官网链接。'}}</view>
+    </view>
+    <view class="button-row">
+      <button class="secondary" bindtap="copyEducationLink">复制网址</button>
+      <button class="primary" bindtap="openEducationLink">打开官网</button>
     </view>
   </view>
 

@@ -11,7 +11,7 @@
         <view class="hero-mark">报</view>
         <view class="hero-copy">
           <view class="hero-title">AI分析报告</view>
-          <view class="hero-subtitle">{{payload.student.city}} · {{payload.student.grade}} · {{payload.exam.name}}</view>
+          <view class="hero-subtitle">{{payload.student.city}} · {{payload.student.grade}} · {{examSummary}}</view>
         </view>
         <view wx:if="{{report.mock_report}}" class="status-pill">规则报告</view>
         <view wx:else class="status-pill">AI报告</view>
@@ -66,51 +66,44 @@
     <view class="panel section">
       <view class="section-title">选科提示</view>
       <view class="muted">{{report.elective_advice}}</view>
+      <button class="secondary full-button" bindtap="openEducationLink">查看{{city}}教育局官网</button>
     </view>
 
     <view class="panel section">
-      <view class="section-title">历史趋势</view>
-      <view class="metric-row">
-        <view class="metric">
-          <view class="metric-value">{{historyRecords.length}}</view>
-          <view class="metric-label">考试次数</view>
-        </view>
-        <view class="metric">
-          <view class="metric-value">{{trendSummary.total && trendSummary.total.diff >= 0 ? '+' : ''}}{{trendSummary.total && trendSummary.total.diff || 0}}</view>
-          <view class="metric-label">总分变化</view>
-        </view>
-        <view class="metric">
-          <view class="metric-value">{{trendSummary.total && trendSummary.total.current || 0}}</view>
-          <view class="metric-label">当前总分</view>
-        </view>
+      <view class="section-title" bindtap="toggleTrendSection">
+        <text>历史趋势</text>
+        <text class="fold-toggle">{{trendExpanded ? '收起' : '展开'}}</text>
       </view>
-      <view class="notice trend-summary-box">{{trendSummary.summary}}</view>
-      <canvas id="reportTotalTrendCanvas" type="2d" class="trend-canvas"></canvas>
-      <view class="section-subtitle">各科曲线趋势</view>
-      <view wx:for="{{subjectTrendRows}}" wx:key="subject" class="trend-row-card">
-        <view class="score-line">
-          <view>
-            <view class="score-main">{{item.subject}} {{item.current}}</view>
-            <view class="score-sub">{{item.direction}}，波动 {{item.volatility || 0}} 分</view>
+      <view class="section-subtitle">默认折叠。这里用于判断总分和单科的持续变化，而不是只看一次考试。</view>
+      <view wx:if="{{trendExpanded}}">
+        <view class="metric-row">
+          <view class="metric">
+            <view class="metric-value">{{historyRecords.length}}</view>
+            <view class="metric-label">考试次数</view>
           </view>
-          <text class="tag {{item.diff >= 0 ? 'tag-green' : 'tag-amber'}}">{{item.diff >= 0 ? '+' : ''}}{{item.diff || 0}}</text>
+          <view class="metric">
+            <view class="metric-value">{{trendSummary.total && trendSummary.total.diff >= 0 ? '+' : ''}}{{trendSummary.total && trendSummary.total.diff || 0}}</view>
+            <view class="metric-label">总分变化</view>
+          </view>
+          <view class="metric">
+            <view class="metric-value">{{trendSummary.total && trendSummary.total.current || 0}}</view>
+            <view class="metric-label">当前总分</view>
+          </view>
         </view>
-        <canvas type="2d" class="report-subject-trend-canvas"></canvas>
+        <view class="notice trend-summary-box">{{trendSummary.summary}}</view>
+        <canvas id="reportTotalTrendCanvas" type="2d" class="trend-canvas"></canvas>
+        <view class="section-subtitle">各科曲线趋势</view>
+        <view wx:for="{{subjectTrendRows}}" wx:key="subject" class="trend-row-card">
+          <view class="score-line">
+            <view>
+              <view class="score-main">{{item.subject}} {{item.current}}</view>
+              <view class="score-sub">{{item.direction}}，波动 {{item.volatility || 0}} 分</view>
+            </view>
+            <text class="tag {{item.diff >= 0 ? 'tag-green' : 'tag-amber'}}">{{item.diff >= 0 ? '+' : ''}}{{item.diff || 0}}</text>
+          </view>
+          <canvas type="2d" class="report-subject-trend-canvas"></canvas>
+        </view>
       </view>
-    </view>
-
-    <view class="panel section">
-      <view class="section-title">教育局附录</view>
-      <view class="section-subtitle">可在这里修改城市，并复制对应教育局官网链接。</view>
-      <input class="input" value="{{city}}" bindinput="onCityInput" placeholder="例如杭州" />
-      <view class="mini-chip-row">
-        <text wx:for="{{cityOptions}}" wx:key="*this" class="mini-chip city-chip">{{item}}</text>
-      </view>
-      <view class="notice city-link-box">
-        <view class="score-main">{{city}}</view>
-        <view class="score-sub">{{educationLink || '暂未内置该城市官网链接，将按城市名搜索教育局官网。'}}</view>
-      </view>
-      <button class="secondary full-button" bindtap="copyEducationLink">复制教育局链接</button>
     </view>
 
     <view class="panel section">
