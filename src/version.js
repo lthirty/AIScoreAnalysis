@@ -3,11 +3,22 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '3.0.14';
+export const VERSION = '3.0.15';
 export const BUILD_DATE = '2026-05-16';
-export const BUILD_NUMBER = '20260516-12';
+export const BUILD_NUMBER = '20260516-13';
 
 export const CHANGELOG = [
+  {
+    version: '3.0.15',
+    date: '2026-05-16',
+    author: 'Codex',
+    changes: [
+      '修正增强分析页“手动输入”模式按钮超出屏幕的问题，改为更稳定的横向自适应布局',
+      '增强分析在异常回退时改为只展示友好提示，并补充“返回后重新进入通常可以很快继续执行”的说明',
+      '后端增强分析统一回退到规则报告，避免把 pydantic 校验错误直接暴露给前端',
+      '微信小程序版本号升级到 v3.0.15 · 2026-05-16'
+    ]
+  },
   {
     version: '3.0.14',
     date: '2026-05-16',

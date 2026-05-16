@@ -4,7 +4,6 @@ import re
 from typing import Any
 
 import httpx
-from pydantic import ValidationError
 
 from app.config import Settings
 from app.schemas import EnhancedMaterial, EnhancedScoreReport, HistoryExamRecord, ScoreInput, ScoreReport
@@ -58,16 +57,19 @@ async def run_ai_report(*, settings: Settings, score_input: ScoreInput) -> Score
         return build_mock_report(score_input)
 
     local_report = build_mock_report(score_input)
-    prompt = _build_report_prompt(score_input, local_report)
-    data = await _chat_completion(
-        settings=settings,
-        model=settings.analyze_model,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    content = _extract_message_content(data)
-    payload = extract_json_payload(content)
-    payload["mock_report"] = False
-    return ScoreReport.model_validate(payload)
+    try:
+        prompt = _build_report_prompt(score_input, local_report)
+        data = await _chat_completion(
+            settings=settings,
+            model=settings.analyze_model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        content = _extract_message_content(data)
+        payload = extract_json_payload(content)
+        payload["mock_report"] = False
+        return ScoreReport.model_validate(payload)
+    except Exception:
+        return local_report
 
 
 async def run_enhanced_report(
@@ -79,7 +81,12 @@ async def run_enhanced_report(
     materials: list[EnhancedMaterial] | None = None,
 ) -> EnhancedScoreReport:
     if not settings.ai_enabled:
-        return build_mock_enhanced_report(score_input)
+        return build_mock_enhanced_report(
+            score_input,
+            base_report=base_report,
+            history_records=history_records,
+            materials=materials,
+        )
 
     local_report = base_report or build_mock_report(score_input)
     messages = _build_enhanced_report_messages(
@@ -88,18 +95,23 @@ async def run_enhanced_report(
         history_records=history_records or [],
         materials=materials or [],
     )
-    data = await _chat_completion(
-        settings=settings,
-        model=settings.analyze_model,
-        messages=messages,
-    )
-    content = _extract_message_content(data)
-    payload = extract_json_payload(content)
-    payload["mock_report"] = False
     try:
+        data = await _chat_completion(
+            settings=settings,
+            model=settings.analyze_model,
+            messages=messages,
+        )
+        content = _extract_message_content(data)
+        payload = extract_json_payload(content)
+        payload["mock_report"] = False
         return EnhancedScoreReport.model_validate(payload)
-    except ValidationError as error:
-        raise AiResponseError("AI 输出不完整，已自动回退到规则增强报告") from error
+    except Exception:
+        return build_mock_enhanced_report(
+            score_input,
+            base_report=local_report,
+            history_records=history_records or [],
+            materials=materials or [],
+        )
 
 
 async def _chat_completion(
