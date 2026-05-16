@@ -92,10 +92,10 @@
   </view>
 
   <view class="panel section">
-    <view class="section-title" bindtap="toggleTrendSection">
-      <text>历史趋势（展开查看更多信息）</text>
-      <text class="fold-toggle">{{trendExpanded ? '收起' : '展开'}}</text>
-    </view>
+      <view class="section-title" bindtap="toggleTrendSection">
+        <text>历史趋势（展开查看更多信息）</text>
+        <text class="fold-toggle">{{trendExpanded ? '收起' : '展开'}}</text>
+      </view>
     <view class="section-subtitle">默认折叠。完成至少一次分析后，这里会记录总分和各科走势。</view>
     <view class="recent-report-entry" bindtap="goLastReport">
       <view class="action-icon">报</view>
@@ -136,39 +136,49 @@
         </view>
         <canvas type="2d" class="subject-trend-canvas"></canvas>
       </view>
-      <view class="section-subtitle manage-title">已录入成绩管理</view>
-      <view wx:for="{{editingHistoryRecords}}" wx:key="id" class="history-manage-card">
-        <view class="manage-head">
-          <view class="manage-meta">
-            <view class="score-main manage-title-text">{{item.examName || '未命名考试'}}</view>
-            <view class="score-sub">{{item.examDate || '未设置日期'}}</view>
-            <view class="score-sub manage-score-text">总分 {{item.totalScore}}</view>
+      <view class="history-manage-section {{trendExpanded ? 'expanded' : 'collapsed'}}">
+        <view class="manage-section-header" bindtap="toggleManageSection">
+          <view class="manage-section-title-row">
+            <text class="manage-section-title">已录入成绩管理</text>
+            <text class="fold-toggle">{{manageExpanded ? '收起' : '展开'}}</text>
           </view>
+          <view class="manage-section-desc">这里保存你已经录入的考试记录，展开后可以继续编辑或删除。</view>
         </view>
-        <view class="manage-actions">
-          <button wx:if="{{editingRecordId !== item.id}}" class="secondary mini-button" data-id="{{item.id}}" bindtap="startEditHistoryRecord">编辑</button>
-          <button class="secondary mini-button danger-button" data-id="{{item.id}}" bindtap="deleteHistoryRecord">删除</button>
-        </view>
-        <view wx:if="{{editingRecordId === item.id}}" class="history-edit-form">
-          <view class="form-grid">
-            <view class="field-card">
-              <text class="label">考试名称</text>
-              <input class="input" value="{{item.examName}}" data-id="{{item.id}}" data-field="examName" bindinput="onHistoryRecordInput" placeholder="例如期中考试" />
+        <view wx:if="{{manageExpanded}}">
+          <view wx:for="{{editingHistoryRecords}}" wx:key="id" class="history-manage-card">
+            <view class="manage-head">
+              <view class="manage-meta">
+                <view class="score-main manage-title-text">{{item.examName || '未命名考试'}}</view>
+                <view class="score-sub">{{item.examDate || '未设置日期'}}</view>
+                <view class="score-sub manage-score-text">总分 {{item.totalScore}}</view>
+              </view>
             </view>
-            <view class="field-card">
-              <text class="label">考试日期</text>
-              <input class="input" value="{{item.examDate}}" data-id="{{item.id}}" data-field="examDate" bindinput="onHistoryRecordInput" placeholder="例如2026-05-15" />
+            <view class="manage-actions">
+              <button wx:if="{{editingRecordId !== item.id}}" class="secondary mini-button" data-id="{{item.id}}" bindtap="startEditHistoryRecord">编辑</button>
+              <button class="secondary mini-button danger-button" data-id="{{item.id}}" bindtap="deleteHistoryRecord">删除</button>
             </view>
-          </view>
-          <view class="section-subtitle compact-manage-note">修改单科得分后会自动重算总分。</view>
-          <view wx:for="{{item.subjects}}" wx:key="index" class="score-table-row manage-score-row">
-            <input class="input" value="{{item.name}}" data-id="{{item.id}}" data-subject-index="{{index}}" data-field="name" bindinput="onHistorySubjectInput" />
-            <input class="input" type="digit" value="{{item.score}}" data-id="{{item.id}}" data-subject-index="{{index}}" data-field="score" bindinput="onHistorySubjectInput" />
-            <input class="input" type="digit" value="{{item.full_score}}" data-id="{{item.id}}" data-subject-index="{{index}}" data-field="full_score" bindinput="onHistorySubjectInput" />
-          </view>
-          <view class="button-row">
-            <button class="secondary" bindtap="cancelEditHistoryRecord">取消</button>
-            <button class="primary" data-id="{{item.id}}" bindtap="saveHistoryRecord">保存修改</button>
+            <view wx:if="{{editingRecordId === item.id}}" class="history-edit-form">
+              <view class="form-grid">
+                <view class="field-card">
+                  <text class="label">考试名称</text>
+                  <input class="input" value="{{item.examName}}" data-id="{{item.id}}" data-field="examName" bindinput="onHistoryRecordInput" placeholder="例如期中考试" />
+                </view>
+                <view class="field-card">
+                  <text class="label">考试日期</text>
+                  <input class="input" value="{{item.examDate}}" data-id="{{item.id}}" data-field="examDate" bindinput="onHistoryRecordInput" placeholder="例如2026-05-15" />
+                </view>
+              </view>
+              <view class="section-subtitle compact-manage-note">修改单科得分后会自动重算总分。</view>
+              <view wx:for="{{item.subjects}}" wx:key="index" class="score-table-row manage-score-row">
+                <input class="input" value="{{item.name}}" data-id="{{item.id}}" data-subject-index="{{index}}" data-field="name" bindinput="onHistorySubjectInput" />
+                <input class="input" type="digit" value="{{item.score}}" data-id="{{item.id}}" data-subject-index="{{index}}" data-field="score" bindinput="onHistorySubjectInput" />
+                <input class="input" type="digit" value="{{item.full_score}}" data-id="{{item.id}}" data-subject-index="{{index}}" data-field="full_score" bindinput="onHistorySubjectInput" />
+              </view>
+              <view class="button-row">
+                <button class="secondary" bindtap="cancelEditHistoryRecord">取消</button>
+                <button class="primary" data-id="{{item.id}}" bindtap="saveHistoryRecord">保存修改</button>
+              </view>
+            </view>
           </view>
         </view>
       </view>

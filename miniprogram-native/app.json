@@ -5,6 +5,7 @@
     "pages/confirm/index",
     "pages/report/index",
     "pages/trend/index",
+    "pages/elective/index",
     "pages/webview/index",
     "pages/privacy/index"
   ],

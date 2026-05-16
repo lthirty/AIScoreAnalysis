@@ -97,29 +97,32 @@ def build_mock_enhanced_report(
     materials: list[EnhancedMaterial] | None = None,
 ) -> EnhancedScoreReport:
     performances = [_build_subject_performance(item) for item in score_input.subjects]
-    sorted_by_rate = sorted(performances, key=lambda item: item.rate)
     base_report = base_report or build_mock_report(score_input)
     history_records = history_records or []
     materials = materials or []
     material_map = _build_material_map(materials)
     trend_map = _build_history_trend_map(history_records)
     insights = [
-        EnhancedSubjectInsight(
-            name=item.name,
-            trend_judgment=_build_trend_judgment(item.name, item.score, trend_map.get(item.name)),
-            diagnosis=_build_subject_diagnosis(item, material_map.get(item.name)),
-            evidence=_build_subject_evidence(item, trend_map.get(item.name), material_map.get(item.name)),
-            action=_build_subject_action(item, material_map.get(item.name)),
-            next_target=_build_subject_target(item, material_map.get(item.name)),
-            score_gap_analysis=_build_subject_gap_analysis(item, base_report),
-            loss_focus=_build_loss_focus(item.name, material_map.get(item.name)),
-            stable_focus=_build_stable_focus(item.name, item, material_map.get(item.name)),
-            source_basis=_build_source_basis(item.name, trend_map.get(item.name), material_map.get(item.name)),
-        )
-        for item in sorted_by_rate[:3]
+        _build_enhanced_subject_insight(item, trend_map.get(item.name), material_map.get(item.name), base_report)
+        for item in performances
     ]
+    if not insights:
+        insights = [
+            EnhancedSubjectInsight(
+                name="未录入学科",
+                trend_judgment="由于缺少数据，因此无法进行深入分析。",
+                diagnosis="由于缺少数据，因此无法进行深入分析。",
+                evidence="由于缺少数据，因此无法进行深入分析。",
+                action="由于缺少数据，因此无法进行深入分析。",
+                next_target="由于缺少数据，因此无法进行深入分析。",
+                score_gap_analysis="由于缺少数据，因此无法进行深入分析。",
+                loss_focus=["由于缺少数据，因此无法进行深入分析。"],
+                stable_focus=["由于缺少数据，因此无法进行深入分析。"],
+                source_basis=["由于缺少数据，因此无法进行深入分析。"],
+            )
+        ]
     overall_trend = _build_overall_trend_summary(score_input, history_records)
-    weakest_subjects = [item.name for item in sorted_by_rate[:3]]
+    weakest_subjects = [item.name for item in sorted(performances, key=lambda item: item.rate)[:3]]
     best_subjects = [item.name for item in sorted(performances, key=lambda item: item.rate, reverse=True)[:2]]
 
     return EnhancedScoreReport(
@@ -129,13 +132,23 @@ def build_mock_enhanced_report(
             f"{weakest_subjects[2] if len(weakest_subjects) > 2 else '第三短板学科'} 做重点定位；"
             f"优势支点主要来自 {best_subjects[0] if best_subjects else '相对稳定学科'}。"
         ),
-        overall_trend=overall_trend,
+        overall_trend=overall_trend or "当前材料不足，先用已录入成绩给出方向性分析。",
         subject_insights=insights,
-        core_diagnosis=_build_core_diagnosis(score_input, history_records, material_map, weakest_subjects),
-        subject_gap_analysis=_build_subject_gap_lines(base_report, weakest_subjects),
-        strength_breakthroughs=_build_strength_breakthroughs(best_subjects, performances),
-        execution_plan=_build_execution_plan(weakest_subjects, material_map),
-        stage_goals=_build_stage_goals(score_input, weakest_subjects),
+        core_diagnosis=_build_core_diagnosis(score_input, history_records, material_map, weakest_subjects) or [
+            "当前增强材料较少，先从最弱学科和最常见失分类型入手。"
+        ],
+        subject_gap_analysis=_build_subject_gap_lines(base_report, weakest_subjects) or [
+            "当前先以总分差和得分率作为判断依据，后续补充题型材料后再细化。"
+        ],
+        strength_breakthroughs=_build_strength_breakthroughs(best_subjects, performances) or [
+            "先稳定优势科目，避免分数回落稀释总分提升。"
+        ],
+        execution_plan=_build_execution_plan(weakest_subjects, material_map) or [
+            "先把当前输入科目拆成题型模块，找出最集中的失分点。"
+        ],
+        stage_goals=_build_stage_goals(score_input, weakest_subjects) or [
+            "下一次考试先验证当前补救动作是否生效。"
+        ],
         risk_alerts=[
             "没有在图片或文字里明确出现的题型、模块、章节名称，系统不会自行补充。",
             "如果历史记录少于 2 次，趋势判断只作为弱提示，不作为稳定结论。",
@@ -307,6 +320,26 @@ def _build_elective_plan(city: str, score_input: ScoreInput) -> ElectiveAdvice:
     history = subject_scores.get("历史", 0)
     has_physics = "物理" in subject_scores
     has_chemistry = "化学" in subject_scores
+    subject_rank = sorted(
+        [
+            ("物理", physics),
+            ("化学", chemistry),
+            ("生物", biology),
+            ("地理", geography),
+            ("政治", politics),
+            ("历史", history),
+        ],
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    top_subject_name = subject_rank[0][0] if subject_rank else "地理"
+    top_subject_score = subject_rank[0][1] if subject_rank else 0
+    second_subject_name = subject_rank[1][0] if len(subject_rank) > 1 else "生物"
+    second_subject_score = subject_rank[1][1] if len(subject_rank) > 1 else 0
+    third_subject_name = subject_rank[2][0] if len(subject_rank) > 2 else "政治"
+    third_subject_score = subject_rank[2][1] if len(subject_rank) > 2 else 0
+    humanities_strength = history + politics + geography
+    mixed_strength = physics + biology + geography
 
     if has_physics and has_chemistry:
         science_base = physics + chemistry
@@ -325,23 +358,23 @@ def _build_elective_plan(city: str, score_input: ScoreInput) -> ElectiveAdvice:
             for subject, score, combo, fit in third_subjects[1:]
         ]
         if physics < 45 or chemistry < 45:
-            fallback_combo = "史政地" if history >= physics else "物生地"
+            fallback_combo = "史政地" if humanities_strength >= mixed_strength else "物生地"
             return ElectiveAdvice(
                 recommendation=fallback_combo,
                 basis=(
                     f"物理 {round(physics, 1)} 分、化学 {round(chemistry, 1)} 分，"
-                    "物化组合当前风险偏高；建议先把得分稳定性拉上来，再决定是否保留理工方向。"
+                    "物化组合当前不够稳；先用更稳的组合守住总分，再回头复核理工方向是否值得保留。"
                 ),
                 alternatives=[
-                    ElectiveOption(combo=recommended_combo, reason=f"如果目标专业强制要求物理、化学，可保留{recommended_combo}，但需要连续两次考试验证物化是否回升。"),
-                    ElectiveOption(combo="物生地", reason="如果物理仍想保留且地理/生物更稳，可把第三科作为总分稳定器。"),
+                    ElectiveOption(combo=recommended_combo, reason=f"如果目标专业明确要求物理、化学，可继续保留{recommended_combo}，但要先观察物化是否连续回升。"),
+                    ElectiveOption(combo="物生地", reason="如果物理仍想保留且地理或生物更稳，这组更适合兼顾理工方向和总分稳定性。"),
                 ],
                 actions=[
                     "先确认目标专业是否强制要求物理或化学。",
                     "用最近两次考试验证物理、化学是否能稳定提升。",
                     f"结合{city}选科政策和学校开课资源复核最终组合。"
                 ],
-                note="这是基于当前成绩结构的直接建议，不能替代学校政策、专业要求和长期兴趣判断。",
+                note=f"建议先结合{city}最新选科政策和目标专业要求做最终复核。",
             )
 
         return ElectiveAdvice(
@@ -357,26 +390,51 @@ def _build_elective_plan(city: str, score_input: ScoreInput) -> ElectiveAdvice:
                 "如果政治成绩突出且目标偏法学、警校、公共管理，可评估物化政。",
                 f"最终以{city}最新选科政策、学校资源和连续成绩趋势为准。"
             ],
-            note="当前建议基于一次或少量成绩，后续应结合历史趋势和兴趣倾向再确认。",
+            note=f"建议结合{city}最新选科政策、学校资源和目标专业要求再最终确认。",
         )
 
-    return ElectiveAdvice(
-        recommendation="暂不直接定组合",
-        basis=(
-            f"当前成绩中缺少完整的物理、化学或第三科数据，无法稳定判断高中选科组合。"
-            f"建议先补齐理化生、史地政成绩，再结合{city}政策和目标专业要求判断。"
+    recommended_combo = f"物{second_subject_name[0]}{third_subject_name[0]}"
+    if physics < 45 or chemistry < 45:
+        recommended_combo = "史政地" if humanities_strength >= mixed_strength else "物生地"
+
+    recommendation_basis = (
+        f"当前得分较稳的科目是{top_subject_name}和{second_subject_name}，"
+        f"其中{top_subject_name}约{round(top_subject_score, 1)}分，{second_subject_name}约{round(second_subject_score, 1)}分；"
+        f"{third_subject_name}约{round(third_subject_score, 1)}分，作为第三科更容易形成总分稳定性。"
+    )
+    if physics < 45 or chemistry < 45:
+        recommendation_basis = (
+            f"物理{round(physics, 1)}分、化学{round(chemistry, 1)}分，当前物化基础偏弱；"
+            f"相比之下，当前更稳的方向是{recommended_combo}，先用更稳的组合保证总分。"
+        )
+
+    alternatives = [
+        ElectiveOption(
+            combo="物化生",
+            reason=f"如果目标专业偏医学、药学、生命科学，且物理和化学后续持续回升，这组最适合保留理工方向。"
         ),
-        alternatives=[
-            ElectiveOption(combo="物化生", reason="适合目标偏医学、药学、生命科学且理化基础稳定的学生。"),
-            ElectiveOption(combo="物化地", reason="适合希望保留理工方向，同时追求第三科得分稳定性的学生。"),
-            ElectiveOption(combo="史政地", reason="适合物化压力较大、目标偏人文社科且史政地表现更稳定的学生。"),
-        ],
-        actions=[
-            "先录入完整九科或至少高考相关六科成绩。",
-            "连续保存2到3次考试后，再看组合总分竞争力。",
-            "同步核对目标专业的选科要求。"
-        ],
-        note="数据不足时不建议只凭单科兴趣或一次考试决定组合。",
+        ElectiveOption(
+            combo="物化地",
+            reason=f"如果地理成绩长期高于{third_subject_name}，这组通常更利于总分稳定和专业覆盖平衡。"
+        ),
+        ElectiveOption(
+            combo="史政地",
+            reason="如果物化压力大，且历史、政治、地理更均衡，这组可以降低理科短板对总分的拖累。"
+        ),
+    ]
+
+    actions = [
+        "先核对目标专业是否要求物理或化学，避免组合和专业要求冲突。",
+        "连续看最近2到3次考试，确认当前强项是否稳定，而不是只看一次成绩。",
+        "若地理或生物明显高于同类学科，优先把它作为第三科比较对象。",
+    ]
+
+    return ElectiveAdvice(
+        recommendation=recommended_combo,
+        basis=recommendation_basis,
+        alternatives=alternatives,
+        actions=actions,
+        note=f"建议结合{city}最新选科政策、学校开课资源和专业要求做最终复核。",
     )
 
 
@@ -384,11 +442,260 @@ def _format_elective_advice(plan: ElectiveAdvice) -> str:
     alternative_text = "；".join([f"{item.combo}：{item.reason}" for item in plan.alternatives])
     action_text = "；".join(plan.actions)
     return (
-        f"建议：{plan.recommendation}。依据：{plan.basis}"
-        f"{' 备选：' + alternative_text if alternative_text else ''}"
-        f"{' 下一步：' + action_text if action_text else ''}"
+        f"直接建议：{plan.recommendation}。建议依据：{plan.basis}"
+        f"{'。其他备选建议及依据：' + alternative_text if alternative_text else ''}"
+        f"{'。下一步确认：' + action_text if action_text else ''}"
     )
 
 
 def _build_elective_advice(city: str, score_input: ScoreInput) -> str:
     return _format_elective_advice(_build_elective_plan(city, score_input))
+
+
+def _build_enhanced_subject_insight(
+    item: SubjectPerformance,
+    trend: dict[str, object] | None,
+    material: EnhancedMaterial | None,
+    base_report: ScoreReport,
+) -> EnhancedSubjectInsight:
+    if not _material_has_data(material):
+        missing = "由于缺少数据，因此无法进行深入分析。"
+        return EnhancedSubjectInsight(
+            name=item.name,
+            trend_judgment=missing,
+            diagnosis=missing,
+            evidence=missing,
+            action=missing,
+            next_target=missing,
+            score_gap_analysis=missing,
+            loss_focus=[missing],
+            stable_focus=[missing],
+            source_basis=[missing],
+        )
+
+    module_summary = _format_extracted_modules(material.detail or "")
+    trend_text = _format_trend_text(trend)
+    gap_text = _build_subject_gap_analysis(item, base_report)
+    diagnosis = (
+        f"{item.name}当前得分率约 {round(item.rate * 100, 1)}%，"
+        f"{module_summary if module_summary != '未提取到明确的模块分数。' else '补充材料可以继续细化为题型或模块分数。'}"
+    )
+    evidence = "；".join([part for part in [trend_text, module_summary] if part])
+    action = (
+        f"围绕{item.name}最弱模块做 20 到 30 分钟定向训练，"
+        "优先整理错因、步骤和易错题型，再做 1 组限时题。"
+    )
+    next_target = f"下次先把{item.name}提升 3 到 5 分，并确认同类错因是否减少。"
+    return EnhancedSubjectInsight(
+        name=item.name,
+        trend_judgment=trend_text,
+        diagnosis=diagnosis,
+        evidence=evidence or diagnosis,
+        action=action,
+        next_target=next_target,
+        score_gap_analysis=gap_text,
+        loss_focus=_build_loss_focus(item.name, material),
+        stable_focus=_build_stable_focus(item.name, item, material),
+        source_basis=_build_source_basis(item.name, trend, material),
+    )
+
+
+def _material_has_data(material: EnhancedMaterial | None) -> bool:
+    if material is None:
+        return False
+    return bool((material.detail or "").strip() or (material.image_url or "").strip())
+
+
+def _build_material_map(materials: list[EnhancedMaterial]) -> dict[str, EnhancedMaterial]:
+    return {material.subject: material for material in materials if material.subject}
+
+
+def _build_history_trend_map(history_records: list[HistoryExamRecord]) -> dict[str, dict[str, object]]:
+    subject_scores: dict[str, list[float]] = {}
+    for record in history_records:
+        for subject in record.subjects:
+            subject_scores.setdefault(subject.name, []).append(subject.score)
+
+    trend_map: dict[str, dict[str, object]] = {}
+    for name, scores in subject_scores.items():
+        latest = scores[-1] if scores else None
+        previous = scores[-2] if len(scores) > 1 else None
+        diff = round(latest - previous, 1) if latest is not None and previous is not None else None
+        if diff is None:
+            direction = "历史记录不足，暂不判断趋势。"
+        elif diff > 0:
+            direction = f"近期上升 {round(diff, 1)} 分。"
+        elif diff < 0:
+            direction = f"近期下降 {abs(round(diff, 1))} 分。"
+        else:
+            direction = "近期保持稳定。"
+        trend_map[name] = {
+            "scores": scores,
+            "latest": latest,
+            "previous": previous,
+            "diff": diff,
+            "direction": direction,
+        }
+    return trend_map
+
+
+def _build_overall_trend_summary(score_input: ScoreInput, history_records: list[HistoryExamRecord]) -> str:
+    current_total = round(sum(item.score for item in score_input.subjects), 1)
+    if len(history_records) < 2:
+        return f"当前总分 {current_total} 分；历史记录不足 2 次，暂以本次成绩作为主判断。"
+    last_two = history_records[-2:]
+    previous_total = round(last_two[0].total_score, 1)
+    latest_total = round(last_two[-1].total_score, 1)
+    diff = round(latest_total - previous_total, 1)
+    if diff > 0:
+        direction = "上升"
+    elif diff < 0:
+        direction = "下降"
+    else:
+        direction = "持平"
+    return f"最近两次总分从 {previous_total} 分到 {latest_total} 分，整体{direction} {abs(diff)} 分。当前总分 {current_total} 分。"
+
+
+def _format_trend_text(trend: dict[str, object] | None) -> str:
+    if not trend:
+        return "历史趋势不足，暂不判断变化方向。"
+    direction = str(trend.get("direction") or "历史趋势不足，暂不判断变化方向。")
+    return direction
+
+
+def _build_subject_diagnosis(item: SubjectPerformance, material: EnhancedMaterial | None) -> str:
+    if not _material_has_data(material):
+        return "由于缺少数据，因此无法进行深入分析。"
+    modules = _extract_module_scores(material.detail or "")
+    if modules:
+        top_module = modules[0]
+        return f"{item.name}当前失分更集中在 {top_module['name']}，优先先补这一类。"
+    return f"{item.name}已有补充材料，但模块分数不够完整，先从题型和错因入手。"
+
+
+def _build_subject_evidence(
+    item: SubjectPerformance,
+    trend: dict[str, object] | None,
+    material: EnhancedMaterial | None,
+) -> str:
+    if not _material_has_data(material):
+        return "由于缺少数据，因此无法进行深入分析。"
+    parts = [f"{item.name}得分率约 {round(item.rate * 100, 1)}%。"]
+    trend_text = _format_trend_text(trend)
+    if trend_text:
+        parts.append(trend_text)
+    module_summary = _format_extracted_modules(material.detail or "")
+    if module_summary:
+        parts.append(module_summary)
+    return " ".join(parts)
+
+
+def _build_subject_action(item: SubjectPerformance, material: EnhancedMaterial | None) -> str:
+    if not _material_has_data(material):
+        return "由于缺少数据，因此无法进行深入分析。请补充试卷照片或题型得分。"
+    return f"围绕{item.name}的薄弱模块做 20 到 30 分钟定向训练，并复盘同类错因。"
+
+
+def _build_subject_target(item: SubjectPerformance, material: EnhancedMaterial | None) -> str:
+    if not _material_has_data(material):
+        return "由于缺少数据，因此无法进行深入分析。"
+    return f"下次把{item.name}提升 3 到 5 分，先验证薄弱模块是否改善。"
+
+
+def _build_subject_gap_analysis(item: SubjectPerformance, base_report: ScoreReport) -> str:
+    for comparison in base_report.subject_comparison:
+        if comparison.name == item.name:
+            if comparison.gap_to_reference is not None:
+                return f"与参考高分相差 {comparison.gap_to_reference} 分，优先补中档题和关键失分点。"
+            return f"当前得分率约 {round(item.rate * 100, 1)}%，可继续围绕题型细节提升。"
+    return "暂无对比分差参考。"
+
+
+def _build_loss_focus(subject_name: str, material: EnhancedMaterial | None) -> list[str]:
+    if not _material_has_data(material):
+        return ["由于缺少数据，因此无法进行深入分析。"]
+    modules = _extract_module_scores(material.detail or "")
+    if modules:
+        return [f"优先补 {modules[0]['name']} 一类模块。"]
+    return [f"优先补 {subject_name} 的题型分布和错因。"]
+
+
+def _build_stable_focus(subject_name: str, item: SubjectPerformance, material: EnhancedMaterial | None) -> list[str]:
+    if not _material_has_data(material):
+        return ["由于缺少数据，因此无法进行深入分析。"]
+    return [f"{subject_name}当前得分率约 {round(item.rate * 100, 1)}%，先稳住已有得分较高的部分。"]
+
+
+def _build_source_basis(
+    subject_name: str,
+    trend: dict[str, object] | None,
+    material: EnhancedMaterial | None,
+) -> list[str]:
+    if not _material_has_data(material):
+        return ["由于缺少数据，因此无法进行深入分析。"]
+    basis = [f"基于{subject_name}补充材料和现有成绩。"]
+    if trend:
+        basis.append(str(trend.get("direction") or "历史趋势不足，暂不判断变化方向。"))
+    return basis
+
+
+def _build_core_diagnosis(
+    score_input: ScoreInput,
+    history_records: list[HistoryExamRecord],
+    material_map: dict[str, EnhancedMaterial],
+    weakest_subjects: list[str],
+) -> list[str]:
+    total_score = round(sum(item.score for item in score_input.subjects), 1)
+    lines = [f"本次总分 {total_score} 分，先围绕 {', '.join(weakest_subjects[:3]) or '当前最弱学科'} 处理。"]
+    missing = [item.name for item in score_input.subjects if not _material_has_data(material_map.get(item.name))]
+    if missing:
+        lines.append(f"{'、'.join(missing)}科目由于缺少数据，因此无法进行深入分析。")
+    if len(history_records) >= 2:
+        lines.append("历史记录已足够形成弱趋势判断，可继续观察连续变化。")
+    else:
+        lines.append("历史记录较少，趋势判断先作为辅助，不作为稳定结论。")
+    return lines
+
+
+def _build_subject_gap_lines(base_report: ScoreReport, weakest_subjects: list[str]) -> list[str]:
+    comparison_map = {item.name: item for item in base_report.subject_comparison}
+    lines: list[str] = []
+    for subject in weakest_subjects[:3]:
+        comparison = comparison_map.get(subject)
+        if not comparison:
+            continue
+        if comparison.gap_to_reference is not None:
+            lines.append(f"{subject}与参考高分相差 {comparison.gap_to_reference} 分。")
+        else:
+            lines.append(f"{subject}当前得分率约 {round(comparison.rate * 100, 1)}%。")
+    return lines
+
+
+def _build_strength_breakthroughs(best_subjects: list[str], performances: list[SubjectPerformance]) -> list[str]:
+    performance_map = {item.name: item for item in performances}
+    lines: list[str] = []
+    for subject in best_subjects[:2]:
+        item = performance_map.get(subject)
+        if not item:
+            continue
+        lines.append(f"{subject}先稳住当前得分率约 {round(item.rate * 100, 1)}%，避免优势回落。")
+    return lines
+
+
+def _build_execution_plan(weakest_subjects: list[str], material_map: dict[str, EnhancedMaterial]) -> list[str]:
+    lines: list[str] = []
+    for subject in weakest_subjects[:3]:
+        material = material_map.get(subject)
+        if not _material_has_data(material):
+            lines.append(f"{subject}由于缺少数据，因此无法进行深入分析。")
+        else:
+            lines.append(f"{subject}先用 20 到 30 分钟拆题型训练，再做 1 组限时题。")
+    return lines
+
+
+def _build_stage_goals(score_input: ScoreInput, weakest_subjects: list[str]) -> list[str]:
+    total_score = round(sum(item.score for item in score_input.subjects), 1)
+    lines = [f"下一次考试先把总分目标定在 {total_score + 10:.1f} 分以上。"]
+    if weakest_subjects:
+        lines.append(f"{weakest_subjects[0]}优先提升 5 到 10 分。")
+    return lines

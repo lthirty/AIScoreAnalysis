@@ -1,13 +1,37 @@
-.manage-title {
-  margin-top: 20rpx;
-}
-
 .history-manage-card {
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1rpx solid #dbe4ee;
   border-radius: 8rpx;
   padding: 16rpx 18rpx;
   margin-top: 14rpx;
+}
+
+.manage-section-header {
+  background: linear-gradient(135deg, #f8fbff 0%, #eef4ff 100%);
+  border: 1rpx solid #dbe4ee;
+  border-radius: 10rpx;
+  padding: 18rpx 18rpx 16rpx;
+}
+
+.manage-section-title-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.manage-section-title {
+  color: #111827;
+  font-size: 34rpx;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.manage-section-desc {
+  color: #64748b;
+  font-size: 24rpx;
+  line-height: 1.55;
+  margin-top: 8rpx;
 }
 
 .manage-head {

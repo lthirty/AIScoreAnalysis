@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.schemas import EnhancedMaterial, EnhancedScoreReport, HistoryExamRecord, ScoreInput, ScoreReport
@@ -95,7 +96,10 @@ async def run_enhanced_report(
     content = _extract_message_content(data)
     payload = extract_json_payload(content)
     payload["mock_report"] = False
-    return EnhancedScoreReport.model_validate(payload)
+    try:
+        return EnhancedScoreReport.model_validate(payload)
+    except ValidationError as error:
+        raise AiResponseError("AI 输出不完整，已自动回退到规则增强报告") from error
 
 
 async def _chat_completion(

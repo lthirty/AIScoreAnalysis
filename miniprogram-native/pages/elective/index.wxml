@@ -1,0 +1,45 @@
+<view class="page">
+  <view wx:if="{{!hasPlan}}" class="empty-state">
+    <view class="title">还没有选科建议</view>
+    <view class="subtitle">先在报告页生成一次分析，再回来看推荐组合和备选方案。</view>
+    <button class="primary" bindtap="goInput">去录入成绩</button>
+    <button class="secondary" bindtap="goReport">返回报告页</button>
+  </view>
+
+  <view wx:if="{{hasPlan}}" class="elective-card">
+    <view class="elective-header">
+      <view class="elective-icon">选</view>
+      <view class="elective-title-group">
+        <text class="elective-title">高中选科建议</text>
+        <text class="elective-subtitle">{{examSummary || '基于当前成绩结构和排名判断'}}</text>
+      </view>
+    </view>
+
+    <view class="elective-highlight-box">
+      <text class="elective-label">直接建议</text>
+      <text class="elective-combo">{{elective.recommendation}}</text>
+      <text class="elective-subhead">建议依据</text>
+      <text class="elective-reason">{{elective.basis}}</text>
+    </view>
+
+    <view wx:if="{{elective.alternatives && elective.alternatives.length}}" class="elective-section-title">其他备选建议及依据</view>
+    <view wx:if="{{elective.alternatives && elective.alternatives.length}}" wx:for="{{elective.alternatives}}" wx:for-item="item" wx:key="combo" class="elective-option">
+      <view class="elective-option-head">{{item.combo}}</view>
+      <view class="elective-option-reason">{{item.reason}}</view>
+    </view>
+
+    <view wx:if="{{elective.actions && elective.actions.length}}" class="elective-section-title">下一步确认</view>
+    <view wx:if="{{elective.actions && elective.actions.length}}" class="elective-action-list">
+      <view wx:for="{{elective.actions}}" wx:for-item="action" wx:key="index" class="elective-action-item">
+        <text class="elective-action-dot">•</text>
+        <text class="elective-action-text">{{action}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{elective.note}}" class="elective-note">{{elective.note}}</view>
+
+    <button class="secondary full-button elective-back" bindtap="goReport">返回报告页</button>
+  </view>
+
+  <view class="safe-area-bottom"></view>
+</view>

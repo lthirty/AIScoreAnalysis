@@ -43,6 +43,7 @@ Page({
     subjectTrendRows: [],
     showTrendEmpty: true,
     trendExpanded: false,
+    manageExpanded: false,
     aiConfigExpanded: false,
     workflowExpanded: false,
     aiConfig: DEFAULT_AI_CONFIG,
@@ -79,6 +80,7 @@ Page({
       trendSummary,
       subjectTrendRows: (trendSummary && trendSummary.subjects) || [],
       showTrendEmpty: historyRecords.length === 0,
+      manageExpanded: false,
       aiConfig,
       aiModeIndex,
       aiModeLabel: AI_MODE_OPTIONS[aiModeIndex].label,
@@ -154,6 +156,12 @@ Page({
     if (trendExpanded && !this.data.showTrendEmpty) {
       wx.nextTick(() => this.renderTrendCharts())
     }
+  },
+
+  toggleManageSection() {
+    this.setData({
+      manageExpanded: !this.data.manageExpanded
+    })
   },
 
   toggleAiConfigSection() {

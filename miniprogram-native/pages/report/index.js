@@ -12,12 +12,107 @@ const ENHANCED_MAX_WAIT_MS = 900000
 
 function createEmptyMaterial() {
   return {
+    id: `material-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     subjectIndex: 0,
     subject: SUBJECTS[0],
     detail: '',
     imagePath: '',
     imageName: ''
   }
+}
+
+function createEmptySubjectGroup(subject = SUBJECTS[0]) {
+  return {
+    id: `group-${subject}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    subject,
+    subjectIndex: Math.max(0, SUBJECTS.indexOf(subject)),
+    mode: 'image',
+    imageEntries: [],
+    detail: ''
+  }
+}
+
+function buildBriefAnalysisDisplay(report) {
+  const overview = (report && report.overview) || {}
+  const advice = Array.isArray(report && report.learning_advice)
+    ? report.learning_advice.slice(0, 3)
+    : []
+
+  return {
+    averageScore: overview.average_score,
+    totalScore: overview.total_score,
+    referenceTotalScore: overview.reference_total_score,
+    advice
+  }
+}
+
+function buildMissingSubjectNotice(missingSubjects) {
+  const subjects = (missingSubjects || []).map((item) => String(item || '').trim()).filter(Boolean)
+  if (!subjects.length) return ''
+  return `${subjects.join('、')}科目由于缺少数据，因此无法进行深入分析，其余已导入数据科目开始进行深入分析。`
+}
+
+function formatDuration(ms) {
+  const safeMs = Math.max(0, Number(ms) || 0)
+  const seconds = Math.max(1, Math.round(safeMs / 1000))
+  if (seconds < 60) return `${seconds} 秒`
+  const minutes = Math.floor(seconds / 60)
+  const remain = seconds % 60
+  return remain ? `${minutes} 分 ${remain} 秒` : `${minutes} 分钟`
+}
+
+function formatElapsedText(ms) {
+  if (!ms) return '0 秒'
+  return `${formatDuration(ms)}`
+}
+
+function buildEnhancedDebugHint(status, elapsedMs, materialCount, uploadCount, error) {
+  const elapsedText = formatDuration(elapsedMs)
+  if (error) {
+    return `服务端返回了错误信息：${error}。系统会继续回退到规则增强报告，避免结果空白。`
+  }
+  if (status === 'pending') {
+    return `任务已排队 ${elapsedText}。常见慢因：材料较多、图片上传尚未结束、云端 AI 正在排队。`
+  }
+  if (status === 'running' && elapsedMs > 60000) {
+    return `已处理 ${elapsedText}。当前有 ${materialCount} 份材料，其中 ${uploadCount} 份是图片；图片越多，上传和识别耗时越长。`
+  }
+  if (status === 'running') {
+    return `正在生成中，已等待 ${elapsedText}。当前共有 ${materialCount} 份补充材料，系统会持续轮询直到完成。`
+  }
+  return `本次增强分析共耗时 ${elapsedText}，材料数 ${materialCount} 份，其中图片 ${uploadCount} 份。`
+}
+
+function buildEnhancedDetailSections(report) {
+  if (!report) return {
+    subjectInsights: [],
+    coreDiagnosis: [],
+    subjectGapAnalysis: [],
+    strengthBreakthroughs: [],
+    executionPlan: [],
+    stageGoals: [],
+    riskAlerts: [],
+    followupMaterials: [],
+    parentFocus: '',
+    electiveNote: ''
+  }
+
+  return {
+    subjectInsights: Array.isArray(report.subject_insights) ? report.subject_insights : [],
+    coreDiagnosis: Array.isArray(report.core_diagnosis) ? report.core_diagnosis : [],
+    subjectGapAnalysis: Array.isArray(report.subject_gap_analysis) ? report.subject_gap_analysis : [],
+    strengthBreakthroughs: Array.isArray(report.strength_breakthroughs) ? report.strength_breakthroughs : [],
+    executionPlan: Array.isArray(report.execution_plan) ? report.execution_plan : [],
+    stageGoals: Array.isArray(report.stage_goals) ? report.stage_goals : [],
+    riskAlerts: Array.isArray(report.risk_alerts) ? report.risk_alerts : [],
+    followupMaterials: Array.isArray(report.followup_materials) ? report.followup_materials : [],
+    parentFocus: report.parent_focus || '',
+    electiveNote: report.elective_note || ''
+  }
+}
+
+function isFinalJobStatus(status) {
+  return status === 'done' || status === 'failed'
 }
 
 function getReportSubjectName(report, key, fallback) {
@@ -32,7 +127,7 @@ function joinLines(lines) {
     .trim()
 }
 
-function buildReportExportText({ payload, report, trendSummary }) {
+function buildReportExportText({ payload, report, trendSummary, enhancedReport }) {
   if (!report || !payload) return ''
 
   const exam = payload.exam || {}
@@ -61,6 +156,79 @@ function buildReportExportText({ payload, report, trendSummary }) {
       ]
     : []
   const trendLines = trendSummary && trendSummary.summary ? [trendSummary.summary] : []
+  const enhancedSubjectLines = Array.isArray(enhancedReport && enhancedReport.subject_insights)
+    ? enhancedReport.subject_insights.map((item) => {
+        const lines = []
+        lines.push(`${item.name || '未命名学科'}：${item.diagnosis || ''}`.trim())
+        if (item.trend_judgment) lines.push(`趋势：${item.trend_judgment}`)
+        if (item.evidence) lines.push(`依据：${item.evidence}`)
+        if (item.score_gap_analysis) lines.push(`分差：${item.score_gap_analysis}`)
+        if (Array.isArray(item.loss_focus) && item.loss_focus.length) lines.push(`失分重点：${item.loss_focus.join('；')}`)
+        if (Array.isArray(item.stable_focus) && item.stable_focus.length) lines.push(`稳定部分：${item.stable_focus.join('；')}`)
+        if (Array.isArray(item.source_basis) && item.source_basis.length) lines.push(`来源：${item.source_basis.join('；')}`)
+        if (item.action) lines.push(`下一步：${item.action}`)
+        if (item.next_target) lines.push(`下次目标：${item.next_target}`)
+        return lines.join('；')
+      })
+    : []
+  const enhancedCoreDiagnosis = Array.isArray(enhancedReport && enhancedReport.core_diagnosis)
+    ? enhancedReport.core_diagnosis
+    : []
+  const enhancedSubjectGapAnalysis = Array.isArray(enhancedReport && enhancedReport.subject_gap_analysis)
+    ? enhancedReport.subject_gap_analysis
+    : []
+  const enhancedStrengthBreakthroughs = Array.isArray(enhancedReport && enhancedReport.strength_breakthroughs)
+    ? enhancedReport.strength_breakthroughs
+    : []
+  const enhancedExecutionPlan = Array.isArray(enhancedReport && enhancedReport.execution_plan)
+    ? enhancedReport.execution_plan
+    : []
+  const enhancedStageGoals = Array.isArray(enhancedReport && enhancedReport.stage_goals)
+    ? enhancedReport.stage_goals
+    : []
+  const enhancedRiskAlerts = Array.isArray(enhancedReport && enhancedReport.risk_alerts)
+    ? enhancedReport.risk_alerts
+    : []
+  const enhancedFollowupMaterials = Array.isArray(enhancedReport && enhancedReport.followup_materials)
+    ? enhancedReport.followup_materials
+    : []
+  const enhancedLines = enhancedReport
+    ? [
+        '',
+        'AI增强分析',
+        enhancedReport.summary || '',
+        '',
+        enhancedReport.overall_trend ? `整体趋势：${enhancedReport.overall_trend}` : '',
+        '',
+        '各科深入分析',
+        ...enhancedSubjectLines,
+        '',
+        '核心诊断',
+        ...enhancedCoreDiagnosis,
+        '',
+        '各科分差分析',
+        ...enhancedSubjectGapAnalysis,
+        '',
+        '优势突破点',
+        ...enhancedStrengthBreakthroughs,
+        '',
+        '执行计划',
+        ...enhancedExecutionPlan,
+        '',
+        '阶段目标',
+        ...enhancedStageGoals,
+        '',
+        '风险提醒',
+        ...enhancedRiskAlerts,
+        '',
+        '建议补充材料',
+        ...enhancedFollowupMaterials,
+        '',
+        enhancedReport.parent_focus ? `家长关注点：${enhancedReport.parent_focus}` : '',
+        enhancedReport.elective_note ? `选科补充说明：${enhancedReport.elective_note}` : '',
+        enhancedReport.disclaimer ? `说明：${enhancedReport.disclaimer}` : ''
+      ]
+    : []
 
   return joinLines([
     'AI分析报告',
@@ -84,16 +252,14 @@ function buildReportExportText({ payload, report, trendSummary }) {
     '学习建议',
     ...adviceLines,
     '',
-    '家长建议',
-    report.parent_advice || '',
-    '',
     '高中选科建议',
     ...electiveLines,
     '',
     '历史趋势',
     ...trendLines,
     '',
-    report.disclaimer || ''
+    report.disclaimer || '',
+    ...enhancedLines
   ])
 }
 
@@ -142,11 +308,28 @@ Page({
     historyRecords: [],
     trendSummary: null,
     subjectTrendRows: [],
+    briefAnalysis: null,
     trendExpanded: false,
     city: '杭州',
     educationLink: '',
-    subjectOptions: SUBJECTS,
-    materialEntries: [createEmptyMaterial()],
+    materialMode: 'image',
+    materialPanelExpanded: true,
+    enhancedExplainExpanded: true,
+    materialSubjectName: '',
+    materialDetail: '',
+    materialImagePath: '',
+    materialImageName: '',
+    pendingMaterials: [],
+    previewMaterialId: '',
+    enhancedJobId: '',
+    enhancedJobStatus: '',
+    enhancedJobError: '',
+    enhancedJobElapsedMs: 0,
+    enhancedJobElapsedText: '0 秒',
+    enhancedDebugHint: '',
+    enhancedMaterialCount: 0,
+    enhancedImageCount: 0,
+    enhancedDetail: buildEnhancedDetailSections(null),
     enhancedPurchased: false,
     strongSubject: '',
     weakSubject: '',
@@ -178,6 +361,7 @@ Page({
     const exam = last && last.payload ? last.payload.exam || {} : {}
     const examSummary = [exam.date, exam.name].filter(Boolean).join(' · ')
     const trendSummary = buildTrendSummary(historyRecords)
+    const briefAnalysis = report ? buildBriefAnalysisDisplay(report) : null
     this.setData({
       hasReport: Boolean(last && last.report),
       payload: last ? last.payload : null,
@@ -185,13 +369,25 @@ Page({
       examSummary,
       historyRecords,
       trendSummary,
+      briefAnalysis,
       subjectTrendRows: trendSummary.subjects || [],
       city,
       educationLink: EDUCATION_DEPT_LINKS[city] || '',
       enhancedPurchased: Boolean(enhanced && last && enhanced.reportKey === this.getReportKey(last)),
       strongSubject: getReportSubjectName(report, 'best_subject', ''),
       weakSubject: getReportSubjectName(report, 'weakest_subject', ''),
-      enhancedReport: enhanced && last && enhanced.reportKey === this.getReportKey(last) ? enhanced.report : null
+      enhancedReport: enhanced && last && enhanced.reportKey === this.getReportKey(last) ? enhanced.report : null,
+      pendingMaterials: [],
+      previewMaterialId: '',
+      enhancedJobId: '',
+      enhancedJobStatus: '',
+      enhancedJobError: '',
+      enhancedJobElapsedMs: 0,
+      enhancedJobElapsedText: '0 秒',
+      enhancedDebugHint: '',
+      enhancedMaterialCount: 0,
+      enhancedImageCount: 0,
+      enhancedDetail: buildEnhancedDetailSections(enhanced && last && enhanced.reportKey === this.getReportKey(last) ? enhanced.report : null)
     })
     if (historyRecords.length > 0 && this.data.trendExpanded) {
       wx.nextTick(() => this.renderTrendCharts())
@@ -214,27 +410,13 @@ Page({
     })
   },
 
-  openEducationLink() {
-    const city = this.data.city.trim() || '杭州'
-    const link = this.data.educationLink
-    if (!link) {
-      wx.showToast({
-        title: '当前城市暂未配置教育局官网',
-        icon: 'none'
-      })
-      return
-    }
-    wx.navigateTo({
-      url: `/pages/webview/index?title=${encodeURIComponent(`${city}教育局`)}&url=${encodeURIComponent(link)}`
-    })
-  },
-
   async exportReportAsImage() {
     if (!this.data.hasReport || this.data.exportingImage) return
     const exportText = buildReportExportText({
       payload: this.data.payload,
       report: this.data.report,
-      trendSummary: this.data.trendSummary
+      trendSummary: this.data.trendSummary,
+      enhancedReport: this.data.enhancedReport
     })
     if (!exportText) {
       wx.showToast({
@@ -318,7 +500,8 @@ Page({
     const exportText = buildReportExportText({
       payload: this.data.payload,
       report: this.data.report,
-      trendSummary: this.data.trendSummary
+      trendSummary: this.data.trendSummary,
+      enhancedReport: this.data.enhancedReport
     })
     if (!exportText) {
       wx.showToast({
@@ -384,6 +567,44 @@ Page({
     if (trendExpanded && this.data.historyRecords.length > 0) {
       wx.nextTick(() => this.renderTrendCharts())
     }
+  },
+
+  toggleEnhancedExplainSection() {
+    this.setData({
+      enhancedExplainExpanded: !this.data.enhancedExplainExpanded
+    })
+  },
+
+  switchMaterialMode(event) {
+    const mode = event.currentTarget.dataset.mode
+    this.setData({ materialMode: mode })
+  },
+
+  toggleMaterialPanel() {
+    this.setData({
+      materialPanelExpanded: !this.data.materialPanelExpanded
+    })
+  },
+
+  onEnhancedSubjectInput(event) {
+    const subject = (event.detail.value || '').trim() || SUBJECTS[0]
+    this.setData({
+      materialSubjectName: subject
+    })
+  },
+
+  onMaterialDetailInput(event) {
+    this.setData({
+      materialDetail: event.detail.value
+    })
+  },
+
+  addSubjectImage() {
+    this.addMaterialRow()
+  },
+
+  addSubjectTextGroup() {
+    this.setData({ materialMode: 'text' })
   },
 
   renderTotalTrendChart() {
@@ -454,30 +675,47 @@ Page({
     }
   },
 
-  onMaterialSubjectChange(event) {
-    const index = Number(event.currentTarget.dataset.index)
-    const subject = this.data.subjectOptions[Number(event.detail.value)]
-    const materialEntries = [...this.data.materialEntries]
-    materialEntries[index] = {
-      ...materialEntries[index],
-      subjectIndex: Number(event.detail.value),
-      subject
-    }
-    this.setData({ materialEntries })
+  updateEnhancedDebugState(status, elapsedMs, materialCount, uploadCount, error = '') {
+    const enhancedDebugHint = buildEnhancedDebugHint(status, elapsedMs, materialCount, uploadCount, error)
+    this.setData({
+      enhancedJobStatus: status || '',
+      enhancedJobError: error || '',
+      enhancedJobElapsedMs: elapsedMs || 0,
+      enhancedJobElapsedText: formatElapsedText(elapsedMs),
+      enhancedMaterialCount: materialCount || 0,
+      enhancedImageCount: uploadCount || 0,
+      enhancedDebugHint
+    })
   },
 
-  onMaterialDetailInput(event) {
-    const index = Number(event.currentTarget.dataset.index)
-    const materialEntries = [...this.data.materialEntries]
-    materialEntries[index] = {
-      ...materialEntries[index],
-      detail: event.detail.value
+  async pollEnhancedJob(jobId, materialCount = 0, uploadCount = 0) {
+    const startedAt = Date.now()
+    let lastStatus = 'pending'
+    while (Date.now() - startedAt < ENHANCED_MAX_WAIT_MS) {
+      const response = await request({
+        path: `/api/enhance-score-job/${jobId}`,
+        method: 'GET'
+      })
+      const status = response && response.status ? response.status : 'pending'
+      lastStatus = status
+      const elapsedMs = Date.now() - startedAt
+      const error = response && response.error ? response.error : ''
+      this.updateEnhancedDebugState(status, elapsedMs, materialCount, uploadCount, error)
+
+      if (status === 'done' && response.result) {
+        return response.result
+      }
+      if (status === 'failed') {
+        throw new Error(error || '增强分析任务失败')
+      }
+
+      await this.sleep(ENHANCED_POLL_INTERVAL_MS)
     }
-    this.setData({ materialEntries })
+
+    throw new Error(`增强分析超时：已等待 ${formatDuration(Date.now() - startedAt)}，任务状态仍为 ${lastStatus}`)
   },
 
   chooseMaterialImage(event) {
-    const index = Number(event.currentTarget.dataset.index)
     wx.chooseImage({
       count: 1,
       sizeType: ['compressed'],
@@ -486,149 +724,253 @@ Page({
         const filePath = res.tempFilePaths && res.tempFilePaths[0]
         const file = res.tempFiles && res.tempFiles[0]
         if (!filePath) return
-        const materialEntries = [...this.data.materialEntries]
-        materialEntries[index] = {
-          ...materialEntries[index],
-          imagePath: filePath,
-          imageName: file && file.name ? file.name : filePath.split('\\').pop().split('/').pop()
-        }
-        this.setData({ materialEntries })
+        this.setData({
+          materialImagePath: filePath,
+          materialImageName: file && file.name ? file.name : filePath.split('\\').pop().split('/').pop(),
+          enhancedStatusText: ''
+        })
       }
     })
   },
 
-  removeMaterialImage(event) {
-    const index = Number(event.currentTarget.dataset.index)
-    const materialEntries = [...this.data.materialEntries]
-    materialEntries[index] = {
-      ...materialEntries[index],
-      imagePath: '',
-      imageName: ''
+  clearMaterialImage() {
+    this.setData({
+      materialImagePath: '',
+      materialImageName: ''
+    })
+  },
+
+  buildCurrentMaterialEntry() {
+    const subject = (this.data.materialSubjectName || '').trim()
+    if (!subject) {
+      return { error: '请先填写要分析的学科。' }
     }
-    this.setData({ materialEntries })
+
+    if (this.data.materialMode === 'image') {
+      if (!this.data.materialImagePath) {
+        return { error: `请先导入${subject}的试卷照片。` }
+      }
+
+      return {
+        entry: {
+          id: `material-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          subject,
+          mode: 'upload',
+          detail: '',
+          preview: this.data.materialImagePath,
+          imageName: this.data.materialImageName || '',
+          filePath: this.data.materialImagePath
+        }
+      }
+    }
+
+    const detail = (this.data.materialDetail || '').trim()
+    if (!detail) {
+      return { error: `请先输入${subject}各题型得分和丢分情况。` }
+    }
+
+    return {
+      entry: {
+        id: `material-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        subject,
+        mode: 'text',
+        detail,
+        preview: '',
+        imageName: '',
+        filePath: ''
+      }
+    }
+  },
+
+  clearCurrentMaterialEntry() {
+    this.setData({
+      materialSubjectName: '',
+      materialDetail: '',
+      materialImagePath: '',
+      materialImageName: ''
+    })
+  },
+
+  getMissingEnhancedSubjects(materials = []) {
+    const subjectSet = new Set(
+      (materials || [])
+        .map((item) => String(item && item.subject ? item.subject : '').trim())
+        .filter(Boolean)
+    )
+    const payloadSubjects = Array.isArray(this.data.payload && this.data.payload.subjects)
+      ? this.data.payload.subjects
+          .map((item) => String(item && item.name ? item.name : '').trim())
+          .filter(Boolean)
+      : []
+    return payloadSubjects.filter((subject) => !subjectSet.has(subject))
+  },
+
+  confirmMissingEnhancedSubjects(missingSubjects) {
+    const content = buildMissingSubjectNotice(missingSubjects)
+    if (!content) return Promise.resolve(true)
+
+    return new Promise((resolve) => {
+      wx.showModal({
+        title: '缺少学科数据',
+        content,
+        confirmText: '继续分析',
+        cancelText: '继续补充',
+        success: (res) => {
+          resolve(Boolean(res && res.confirm))
+        },
+        fail: () => resolve(false)
+      })
+    })
   },
 
   addMaterialRow() {
+    const { entry, error } = this.buildCurrentMaterialEntry()
+    if (error) {
+      this.setData({ enhancedStatusText: error })
+      return
+    }
+
+    const pendingMaterials = [...(this.data.pendingMaterials || []), entry]
     this.setData({
-      materialEntries: [...this.data.materialEntries, createEmptyMaterial()]
+      pendingMaterials,
+      previewMaterialId: '',
+      materialPanelExpanded: true,
+      enhancedStatusText: `已加入${entry.subject}，可以继续导入另一门学科，或点击“开始分析”统一分析。`
+    })
+    this.clearCurrentMaterialEntry()
+  },
+
+  toggleMaterialPreview(event) {
+    const entryId = event.currentTarget.dataset.id
+    this.setData({
+      previewMaterialId: this.data.previewMaterialId === entryId ? '' : entryId
     })
   },
 
-  removeMaterialRow(event) {
-    const index = Number(event.currentTarget.dataset.index)
-    const next = this.data.materialEntries.filter((_, itemIndex) => itemIndex !== index)
+  editMaterialEntry(event) {
+    const entryId = event.currentTarget.dataset.id
+    const entry = (this.data.pendingMaterials || []).find((item) => item.id === entryId)
+    if (!entry) return
+
     this.setData({
-      materialEntries: next.length ? next : [createEmptyMaterial()]
+      materialSubjectName: entry.subject || '',
+      materialMode: entry.mode === 'upload' ? 'image' : 'text',
+      materialDetail: entry.detail || '',
+      materialImagePath: entry.preview || '',
+      materialImageName: entry.imageName || '',
+      pendingMaterials: (this.data.pendingMaterials || []).filter((item) => item.id !== entryId),
+      previewMaterialId: '',
+      materialPanelExpanded: true,
+      enhancedStatusText: `正在修改${entry.subject}，调整后可重新添加。`
     })
   },
 
-  async prepareEnhancedMaterials() {
+  async prepareEnhancedMaterials(entries = []) {
     const prepared = []
-    const totalEntries = this.data.materialEntries.length
+    const groups = entries || []
     let processedCount = 0
-    for (const entry of this.data.materialEntries) {
-      const hasDetail = Boolean((entry.detail || '').trim())
-      const hasImage = Boolean(entry.imagePath)
-      if (!hasDetail && !hasImage) continue
-      let imageUrl = ''
-      if (hasImage) {
-        this.setEnhancedProgress(1, `正在上传补充材料 ${processedCount + 1}/${Math.max(1, totalEntries)}`)
+    const totalImages = groups.filter((entry) => entry.mode === 'upload' && entry.filePath).length
+    for (const entry of groups) {
+      const subject = entry.subject || SUBJECTS[0]
+      if (entry.mode === 'upload' && entry.filePath) {
+        this.setEnhancedProgress(1, `正在上传补充材料 ${processedCount + 1}/${Math.max(1, totalImages)}`)
         const uploaded = await uploadFileForUrl({
-          filePath: entry.imagePath,
-          type: entry.subject,
+          filePath: entry.filePath,
+          type: subject,
           folder: 'enhanced-materials'
         })
-        imageUrl = uploaded.fileUrl
+        prepared.push({
+          subject,
+          input_type: 'image',
+          detail: '',
+          image_url: uploaded.fileUrl,
+          image_name: entry.imageName || ''
+        })
+        processedCount += 1
+        continue
       }
-      prepared.push({
-        subject: entry.subject,
-        input_type: hasDetail && hasImage ? 'image+text' : (hasImage ? 'image' : 'text'),
-        detail: entry.detail || '',
-        image_url: imageUrl,
-        image_name: entry.imageName || ''
-      })
-      processedCount += 1
+
+      const detail = (entry.detail || '').trim()
+      if (detail) {
+        prepared.push({
+          subject,
+          input_type: 'text',
+          detail,
+          image_url: '',
+          image_name: ''
+        })
+      }
     }
     return prepared
   },
 
-  async pollEnhancedJob(jobId) {
-    const startedAt = Date.now()
-    let transientErrors = 0
-    while (this._pageAlive !== false) {
-      const elapsed = Date.now() - startedAt
-      this.setEnhancedProgress(
-        3,
-        elapsed < 90000
-          ? 'AI 正在分析题型得分、历史趋势和补充材料'
-          : elapsed < 240000
-            ? '增强分析仍在生成，系统正在持续等待'
-            : '云端分析较慢，系统仍在继续生成，请保持当前页面'
-      )
-      await this.sleep(ENHANCED_POLL_INTERVAL_MS)
-      let job = null
-      try {
-        job = await request({
-          path: `/api/enhance-score-job/${jobId}`,
-          method: 'GET'
-        })
-        transientErrors = 0
-      } catch (error) {
-        if (this.isTransientCloudError(error) && transientErrors < 40) {
-          transientErrors += 1
-          this.setEnhancedProgress(3, 'AI 处理中，正在继续等待云端结果')
-          continue
-        }
-        if (elapsed < ENHANCED_MAX_WAIT_MS) {
-          this.setEnhancedProgress(3, '请求较慢，正在自动重试增强分析')
-          continue
-        }
-        throw error
-      }
-      if (job.status === 'done') {
-        this.setEnhancedProgress(4, '增强分析已经生成，正在回传结果')
-        return job.result
-      }
-      if (job.status === 'failed') {
-        if (this.isTransientCloudError(job) && elapsed < ENHANCED_MAX_WAIT_MS) {
-          this.setEnhancedProgress(3, '云端正在重新整理增强分析，请继续等待')
-          continue
-        }
-        throw { detail: job.error || '增强分析生成失败' }
-      }
-    }
-    throw { detail: '页面已关闭，停止等待增强分析。' }
-  },
-
-  isTransientCloudError(error) {
-    const message = [
-      error && error.errMsg,
-      error && error.message,
-      error && error.detail,
-      error && error.data && error.data.detail,
-      error && error.error
-    ].filter(Boolean).join(' ')
-    return message.includes('102002')
-      || message.includes('请求超时')
-      || message.includes('system error')
-      || message.includes('503')
-      || message.includes('502')
-      || message.includes('504')
-      || message.includes('service unavailable')
-      || message.includes('bad gateway')
+  buildMaterialEntryFromCurrent() {
+    return this.buildCurrentMaterialEntry()
   },
 
   async generateEnhancedReport() {
     if (this.data.enhancedLoading || !this.data.payload || !this.data.report) return
+
+    const pendingMaterials = [...(this.data.pendingMaterials || [])]
+    const hasCurrentInput = Boolean(
+      (this.data.materialSubjectName || '').trim() ||
+        (this.data.materialDetail || '').trim() ||
+        this.data.materialImagePath
+    )
+    if (hasCurrentInput) {
+      const { entry, error } = this.buildCurrentMaterialEntry()
+      if (error) {
+        this.setData({ enhancedStatusText: error })
+        return
+      }
+      pendingMaterials.push(entry)
+      this.setData({
+        pendingMaterials,
+        previewMaterialId: '',
+        materialSubjectName: '',
+        materialDetail: '',
+        materialImagePath: '',
+        materialImageName: ''
+      })
+    }
+
+    if (pendingMaterials.length === 0) {
+      this.setData({ enhancedStatusText: '请先至少加入一门学科后再开始分析。' })
+      return
+    }
+
+    const missingSubjects = this.getMissingEnhancedSubjects(pendingMaterials)
+    if (missingSubjects.length) {
+      const shouldContinue = await this.confirmMissingEnhancedSubjects(missingSubjects)
+      if (!shouldContinue) {
+        this.setData({
+          enhancedStatusText: '已取消开始分析，请继续补充缺少数据的科目后再分析。'
+        })
+        return
+      }
+      this.setData({
+        enhancedStatusText: buildMissingSubjectNotice(missingSubjects)
+      })
+    }
+
     this.setData({
       enhancedLoading: true,
       enhancedProgressTitle: '正在生成增强分析',
       enhancedProgressStep: 0,
-      enhancedStatusText: '正在整理趋势和补充材料'
+      enhancedStatusText: '正在整理趋势和补充材料',
+      enhancedJobId: '',
+      enhancedJobStatus: '',
+      enhancedJobError: '',
+      enhancedJobElapsedMs: 0,
+      enhancedJobElapsedText: '0 秒',
+      enhancedDebugHint: '',
+      enhancedMaterialCount: pendingMaterials.length,
+      enhancedImageCount: pendingMaterials.filter((item) => item.mode === 'upload').length
     })
     try {
       this.setEnhancedProgress(0, '正在整理趋势和补充材料')
-      const materials = await this.prepareEnhancedMaterials()
+      const materials = await this.prepareEnhancedMaterials(pendingMaterials)
+      this.updateEnhancedDebugState('preparing', 0, pendingMaterials.length, pendingMaterials.filter((item) => item.mode === 'upload').length)
       this.setEnhancedProgress(1, '补充材料已准备完成，正在提交增强分析请求')
       const job = await request({
         path: '/api/enhance-score-job',
@@ -645,19 +987,85 @@ Page({
           materials
         }
       })
+      this.updateEnhancedDebugState('queued', 0, pendingMaterials.length, pendingMaterials.filter((item) => item.mode === 'upload').length)
       this.setEnhancedProgress(2, '任务已提交，正在连接 AI 大模型')
-      const enhancedReport = await this.pollEnhancedJob(job.job_id)
+      this.setData({
+        enhancedJobId: job.job_id
+      })
+      const enhancedReport = await this.pollEnhancedJob(
+        job.job_id,
+        pendingMaterials.length,
+        pendingMaterials.filter((item) => item.mode === 'upload').length
+      )
       const last = getLastReport()
       setEnhancedReport({
         reportKey: this.getReportKey(last),
         report: enhancedReport
       })
-      this.setData({ enhancedReport })
+      this.setData({
+        enhancedReport,
+        enhancedDetail: buildEnhancedDetailSections(enhancedReport),
+        enhancedJobStatus: 'done',
+        enhancedDebugHint: buildEnhancedDebugHint('done', this.data.enhancedJobElapsedMs || 0, pendingMaterials.length, pendingMaterials.filter((item) => item.mode === 'upload').length)
+      })
     } catch (error) {
       if (this._pageAlive !== false) {
         this.setEnhancedProgress(3, '增强分析生成较慢，系统已自动重试。您可以稍后继续查看，已上传材料不会丢失。')
       }
+      this.updateEnhancedDebugState('failed', this.data.enhancedJobElapsedMs || 0, pendingMaterials.length, pendingMaterials.filter((item) => item.mode === 'upload').length, error && error.message ? error.message : String(error))
       console.error(error)
+      if (!this.data.enhancedReport && this.data.report) {
+        const fallback = buildEnhancedDetailSections({
+          subject_insights: [],
+          core_diagnosis: [
+            '当前任务未成功返回完整增强分析，但系统已根据现有成绩与补充材料整理了基础深度结论。',
+            '如果是图片上传较慢，通常是素材较大或网络较慢；如果是服务端错误，系统会继续沿用规则兜底内容。'
+          ],
+          subject_gap_analysis: [],
+          strength_breakthroughs: [
+            '先稳住当前优势科目，保持原有训练节奏，避免优势回落。',
+            '把最弱学科拆成题型级别来补，不再只看总分。'
+          ],
+          execution_plan: [
+            '优先复盘当前输入科目的题型与模块，先找失分最集中的部分。',
+            '接下来 7 天每天安排 20 到 30 分钟的定向训练，并记录错因。',
+            '补充一张更清晰的试卷或模块截图，AI 会更容易定位具体失分点。'
+          ],
+          stage_goals: [
+            '下一次考试先验证当前补救动作是否生效。',
+            '先让最弱科目的基础题稳定，再追求中档题提分。'
+          ],
+          risk_alerts: [
+            '材料太少时，AI 只能给出方向性结论，不能替代试卷讲评。',
+            '只看单次成绩很容易误判，建议至少连续观察 2 到 3 次。'
+          ],
+          followup_materials: [
+            '补充更清晰的试卷照片，尤其是题型标题和模块得分。',
+            '如果是文字输入，尽量写出“题型-满分-得分-失分原因”。'
+          ],
+          parent_focus: '家长可以先盯住一个最弱模块，帮助孩子把错因写清楚，而不是一次盯所有科目。',
+          elective_note: this.data.report.elective_note || ''
+        })
+        this.setData({
+          enhancedReport: {
+            summary: 'AI增强分析已完成基础兜底，建议继续补充更清晰材料后再次生成。',
+            overall_trend: '',
+            subject_insights: [],
+            core_diagnosis: fallback.coreDiagnosis,
+            subject_gap_analysis: fallback.subjectGapAnalysis,
+            strength_breakthroughs: fallback.strengthBreakthroughs,
+            execution_plan: fallback.executionPlan,
+            stage_goals: fallback.stageGoals,
+            risk_alerts: fallback.riskAlerts,
+            followup_materials: fallback.followupMaterials,
+            parent_focus: fallback.parentFocus,
+            elective_note: fallback.electiveNote,
+            disclaimer: '增强分析基于当前成绩和已上传材料生成，不能替代试卷讲评、学校政策和教师判断。'
+          },
+          enhancedDetail: fallback
+        })
+        this.setEnhancedProgress(4, '已切换到规则兜底分析，当前结果可继续查看。')
+      }
     } finally {
       this.setData({
         enhancedLoading: false
