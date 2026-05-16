@@ -104,6 +104,13 @@ class ScoreReport(BaseModel):
     mock_report: bool = True
 
 
+class EnhancedAnalysisRow(BaseModel):
+    content: str
+    score: float
+    full_score: float
+    rate: float
+
+
 class EnhancedSubjectInsight(BaseModel):
     name: str
     trend_judgment: str
@@ -111,6 +118,9 @@ class EnhancedSubjectInsight(BaseModel):
     evidence: str
     action: str
     next_target: str
+    analysis_rows: list[EnhancedAnalysisRow] = Field(default_factory=list)
+    section_advice: list[str] = Field(default_factory=list)
+    analysis_summary: str = ""
     score_gap_analysis: str = ""
     loss_focus: list[str] = Field(default_factory=list)
     stable_focus: list[str] = Field(default_factory=list)
@@ -142,11 +152,8 @@ class EnhancedScoreReport(BaseModel):
     summary: str
     overall_trend: str
     subject_insights: list[EnhancedSubjectInsight]
-    core_diagnosis: list[str] = Field(default_factory=list)
     subject_gap_analysis: list[str] = Field(default_factory=list)
     strength_breakthroughs: list[str] = Field(default_factory=list)
-    execution_plan: list[str] = Field(default_factory=list)
-    stage_goals: list[str] = Field(default_factory=list)
     risk_alerts: list[str]
     followup_materials: list[str]
     parent_focus: str

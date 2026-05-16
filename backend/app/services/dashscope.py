@@ -9,7 +9,7 @@ import httpx
 from app.config import Settings
 from app.schemas import EnhancedMaterial, EnhancedScoreReport, HistoryExamRecord, ScoreInput, ScoreReport
 from app.services.json_utils import extract_json_payload
-from app.services.report_generator import build_mock_enhanced_report, build_mock_report
+from app.services.report_generator import build_mock_enhanced_report, build_mock_report, ensure_all_subject_insights
 
 
 class AiConfigurationError(RuntimeError):
@@ -164,7 +164,14 @@ async def _build_enhanced_report_once(
         history_records=history_records,
         materials=materials,
     )
-    return await _chat_and_validate_enhanced_report(settings=settings, messages=messages)
+    report = await _chat_and_validate_enhanced_report(settings=settings, messages=messages)
+    return ensure_all_subject_insights(
+        report,
+        score_input,
+        base_report=base_report,
+        history_records=history_records,
+        materials=materials,
+    )
 
 
 async def _build_enhanced_report_repair(
@@ -183,7 +190,14 @@ async def _build_enhanced_report_repair(
         materials=materials,
         previous_error=previous_error,
     )
-    return await _chat_and_validate_enhanced_report(settings=settings, messages=messages)
+    report = await _chat_and_validate_enhanced_report(settings=settings, messages=messages)
+    return ensure_all_subject_insights(
+        report,
+        score_input,
+        base_report=base_report,
+        history_records=history_records,
+        materials=materials,
+    )
 
 
 async def _chat_and_validate_enhanced_report(
@@ -392,9 +406,12 @@ def _build_enhanced_report_messages(
 4. 如果用户提供了像“选择题 12 题共 60 分得了 42 分”“解答题-导数与函数 10 分得了 3 分”这种材料，要明确指出哪类题型失分更集中，并给出更具体的训练建议。
 5. 每个学科判断尽量说明依据来自哪类材料：本次成绩、历史趋势、文字录入、图片可见内容。
 6. 如果增强材料已经提供了可计算的模块得分率或失分分值，请直接指出“失分最集中模块”“相对稳定模块”“优先训练顺序”，不要只停留在笼统表述。
-7. action 必须写成可执行动作，至少包含训练方式、频率或时长；next_target 必须给出下一次考试可验证的小目标。
-8. 增强分析应比基础分析更具体，尤其要回答：当前趋势、失分模块、下一步补什么材料、家长如何配合、下次目标怎么定。
-9. elective_note 不做绝对选科承诺。
+7. 对于已经输入了分项材料的学科，必须基于这些材料给出分项层面的针对性分析与建议，不能只输出学科总论。
+8. 对于所有已输入成绩的学科，subject_insights 必须逐科覆盖，不能只写个别学科。
+9. action 必须写成可执行动作，至少包含训练方式、频率或时长；next_target 必须给出下一次考试可验证的小目标。
+10. 每个学科都要补充 analysis_rows，逐行列出内容、得分、总分、得分率；analysis_summary 用一句话总结该科的当前判断。
+11. 增强分析应比基础分析更具体，尤其要回答：当前趋势、失分模块、下一步补什么材料、下次目标怎么定；不要再输出独立的“阶段目标”或“家长关注点”模块。
+12. elective_note 不做绝对选科承诺。
 
 JSON 格式必须完全符合：
 {json.dumps(EnhancedScoreReport.model_json_schema(), ensure_ascii=False)}
@@ -446,7 +463,7 @@ def _build_enhanced_report_repair_messages(
 修复要求：
 1. 只输出 JSON，不要输出 Markdown 或解释文字。
 2. 必须完整包含 schema 中所有必填字段，不能遗漏 summary、overall_trend、subject_insights、risk_alerts、followup_materials、parent_focus、elective_note。
-3. 如果某些学科缺少数据，请直接使用“由于缺少数据，因此无法进行深入分析。”。
+3. 如果某些学科缺少数据，请直接使用“由于缺少数据，该科目无法进行深入分析。”。
 4. 保持内容具体、可执行，不要输出空字符串或空数组作为主要结论。
 5. 如果上一轮输出缺少字段，请补齐；如果字段格式不对，请修正为 schema 要求的格式。
 

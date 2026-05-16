@@ -1,6 +1,10 @@
+import re
+from typing import Any
+
 from app.schemas import (
     ElectiveAdvice,
     ElectiveOption,
+    EnhancedAnalysisRow,
     EnhancedMaterial,
     EnhancedScoreReport,
     EnhancedSubjectInsight,
@@ -90,6 +94,155 @@ def build_mock_report(score_input: ScoreInput) -> ScoreReport:
     )
 
 
+def _format_extracted_modules(detail: str) -> str:
+    modules = _extract_module_scores(detail)
+    if not modules:
+        return "未提取到明确的模块分数。"
+    formatted = []
+    for module in modules:
+        formatted.append(
+            f"{module['name']} {module['score']}/{module['full_score']}，失分{module['loss']}，得分率{module['rate']}%"
+        )
+    return "；".join(formatted)
+
+
+def _extract_module_scores(detail: str) -> list[dict[str, Any]]:
+    text = (detail or "").replace("：", ":").replace("，", ",").replace("；", ";").replace("／", "/")
+    modules: list[dict[str, Any]] = []
+    seen: set[tuple[str, float, float]] = set()
+    lines = re.split(r"[\n;；。]+", text)
+
+    verbose_patterns = (
+        re.compile(
+            r"(?P<name>.+?)[(（]\s*(?P<full>\d+(?:\.\d+)?)\s*分?[)）]\s*(?:,|，|:|：)?\s*(?:得了|得|拿了|拿到|获得)\s*(?P<score>\d+(?:\.\d+)?)\s*分?"
+        ),
+        re.compile(
+            r"(?P<name>.+?)\s*(?:,|，|:|：)?\s*(?:得了|得|拿了|拿到|获得)\s*(?P<score>\d+(?:\.\d+)?)\s*分?\s*[(（]\s*(?P<full>\d+(?:\.\d+)?)\s*分?[)）]"
+        ),
+        re.compile(
+            r"(?P<name>.+?)\s*(?P<score>\d+(?:\.\d+)?)\s*/\s*(?P<full>\d+(?:\.\d+)?)"
+        ),
+    )
+
+    for line in lines:
+        candidate = line.strip(" ,;；。.!！?？")
+        if not candidate:
+            continue
+
+        matched = None
+        for pattern in verbose_patterns:
+            match = pattern.search(candidate)
+            if match:
+                matched = match
+                break
+        if not matched:
+            continue
+
+        name = matched.group("name").strip(" -:：,;，。/|")
+        if not name:
+            continue
+
+        score = round(float(matched.group("score")), 1)
+        full_score = round(float(matched.group("full")), 1)
+        if full_score <= 0:
+            continue
+
+        key = (_normalize_subject_key(name), score, full_score)
+        if key in seen:
+            continue
+        seen.add(key)
+        modules.append(
+            {
+                "name": name,
+                "score": score,
+                "full_score": full_score,
+                "loss": round(full_score - score, 1),
+                "rate": round(score / full_score * 100, 1),
+            }
+        )
+
+    return modules
+
+
+def _module_matches_alias(module_name: str, aliases: list[str]) -> bool:
+    module_key = _normalize_subject_key(module_name)
+    if not module_key:
+        return False
+    for alias in aliases:
+        alias_key = _normalize_subject_key(alias)
+        if not alias_key:
+            continue
+        if alias_key == module_key or alias_key in module_key or module_key in alias_key:
+            return True
+    return False
+
+
+def _build_missing_subject_guidance(subject_name: str) -> dict[str, object]:
+    subject = subject_name or "该科目"
+    if subject == "语文":
+        summary = "语文可先补阅读理解、古诗文和作文这三类材料，再看失分是否集中在审题、默写或结构表达。"
+        action = "先补1张能看清题目的试卷或作文批改页，再把阅读、古诗文、作文的得分和失分原因拆开记录。"
+        target = "下次先确认语文的失分是来自阅读、古诗文还是作文，再针对性补强。"
+        focus = ["优先补阅读理解和作文材料。", "先看审题、结构和表达是否稳定。"]
+    elif subject == "数学":
+        summary = "数学通常最值得先看基础题、计算步骤和中档题，补齐题型后很容易看到真实提分空间。"
+        action = "先补选择、填空和大题的得分记录，或者上传一页能看清步骤的题目截图。"
+        target = "下次先把数学的基础题稳定住，再看计算和压轴题是否还能继续提升。"
+        focus = ["优先补基础题和步骤题。", "先看计算错误和审题遗漏。"]
+    elif subject == "英语":
+        summary = "英语可先补词汇、语法、阅读和作文四块，通常最容易在客观题和写作里找到提分点。"
+        action = "先补阅读、完形、语法填空或作文批改页，重点记录题型得分而不是只写总分。"
+        target = "下次先确认英语是词汇不稳、阅读慢，还是作文和语法在拖后腿。"
+        focus = ["优先补阅读和写作材料。", "先看词汇与语法是否影响客观题。"]
+    elif subject == "物理":
+        summary = "物理通常要先看公式应用、受力分析和实验题，材料一补上就能快速定位短板。"
+        action = "先补受力分析、公式代入和实验题的题面或批改页，记录哪一步开始丢分。"
+        target = "下次先确认物理是概念不清、公式不会用，还是实验题表述不完整。"
+        focus = ["优先补公式和实验材料。", "先看步骤丢分还是概念丢分。"]
+    elif subject == "化学":
+        summary = "化学可先补方程式、实验现象和计算题，很多提分点都来自基础概念是否扎实。"
+        action = "先补化学方程式、实验题和计算题的分数记录，尤其是反应式和现象描述。"
+        target = "下次先确认化学是方程式不会写、实验不会判断，还是计算题丢分较多。"
+        focus = ["优先补方程式和实验题。", "先看反应现象和计算步骤。"]
+    elif subject == "生物":
+        summary = "生物常见提分点在概念辨析、图表解读和实验设计，补题型后更容易找到薄弱环节。"
+        action = "先补图表题、实验设计题和概念判断题的得分情况，尽量写清具体错因。"
+        target = "下次先确认生物是概念记忆、图表分析还是实验设计在影响得分。"
+        focus = ["优先补图表和实验题。", "先看概念辨析是否稳定。"]
+    elif subject == "历史":
+        summary = "历史可先补时间线、史实对应和材料题，很多得分差异都来自材料理解是否到位。"
+        action = "先补时间线、选择题和材料题的得分记录，最好能看清题干和作答要求。"
+        target = "下次先确认历史是史实记忆、时间线梳理还是材料题表达在掉分。"
+        focus = ["优先补材料题和时间线。", "先看史实对应是否准确。"]
+    elif subject == "地理":
+        summary = "地理最值得先补地图判读、区域特征和材料分析，通常能很快看出空间概念是否扎实。"
+        action = "先补地图题、区域比较题和材料题的得分情况，尤其写清楚题干里出现的区域或图表信息。"
+        target = "下次先确认地理是地图信息提取、区域特征还是材料题表述在拖分。"
+        focus = ["优先补地图判读和区域比较。", "先看材料题是否能读出关键信息。"]
+    elif subject == "政治":
+        summary = "政治可以先补术语、材料概括和观点表达，通常材料题一补上就能看见分差。"
+        action = "先补材料分析题、术语题和简答题的得分记录，重点写清观点是否完整。"
+        target = "下次先确认政治是术语不准、材料提炼不足，还是观点表达不完整。"
+        focus = ["优先补材料题和术语题。", "先看观点表达是否完整。"]
+    else:
+        summary = f"{subject}暂未导入试卷或题型得分，建议先补充题型材料，再按模块拆分失分点。"
+        action = "先补能看清题目和分数的截图，或直接输入各题型的满分、得分和失分原因。"
+        target = f"下次先把{subject}补到可以按题型复盘，再看失分是否集中。"
+        focus = ["优先补题型材料。", "先看失分是否集中在基础题。"]
+
+    return {
+        "trend_judgment": "暂无题型证据，但可以先按学科特性补材料。",
+        "diagnosis": summary,
+        "evidence": summary,
+        "action": action,
+        "next_target": target,
+        "analysis_summary": summary,
+        "loss_focus": focus,
+        "stable_focus": [f"先稳住{subject}已有基础分，不要因为缺材料就把这科完全放掉。"],
+        "source_basis": [f"基于{subject}学科常见提分路径和当前缺少材料的情况。"],
+    }
+
+
 def build_mock_enhanced_report(
     score_input: ScoreInput,
     base_report: ScoreReport | None = None,
@@ -103,22 +256,30 @@ def build_mock_enhanced_report(
     material_map = _build_material_map(materials)
     trend_map = _build_history_trend_map(history_records)
     insights = [
-        _build_enhanced_subject_insight(item, trend_map.get(item.name), material_map.get(item.name), base_report)
+        _build_enhanced_subject_insight(
+            item,
+            trend_map.get(item.name),
+            _get_material_for_subject(material_map, item.name),
+            base_report,
+        )
         for item in performances
     ]
     if not insights:
+        missing = "由于缺少数据，该科目无法进行深入分析。"
         insights = [
             EnhancedSubjectInsight(
                 name="未录入学科",
-                trend_judgment="由于缺少数据，因此无法进行深入分析。",
-                diagnosis="由于缺少数据，因此无法进行深入分析。",
-                evidence="由于缺少数据，因此无法进行深入分析。",
-                action="由于缺少数据，因此无法进行深入分析。",
-                next_target="由于缺少数据，因此无法进行深入分析。",
-                score_gap_analysis="由于缺少数据，因此无法进行深入分析。",
-                loss_focus=["由于缺少数据，因此无法进行深入分析。"],
-                stable_focus=["由于缺少数据，因此无法进行深入分析。"],
-                source_basis=["由于缺少数据，因此无法进行深入分析。"],
+                trend_judgment=missing,
+                diagnosis=missing,
+                evidence=missing,
+                action=missing,
+                next_target=missing,
+                analysis_rows=[],
+                analysis_summary=missing,
+                score_gap_analysis=missing,
+                loss_focus=[missing],
+                stable_focus=[missing],
+                source_basis=[missing],
             )
         ]
     overall_trend = _build_overall_trend_summary(score_input, history_records)
@@ -134,20 +295,11 @@ def build_mock_enhanced_report(
         ),
         overall_trend=overall_trend or "当前材料不足，先用已录入成绩给出方向性分析。",
         subject_insights=insights,
-        core_diagnosis=_build_core_diagnosis(score_input, history_records, material_map, weakest_subjects) or [
-            "当前增强材料较少，先从最弱学科和最常见失分类型入手。"
-        ],
         subject_gap_analysis=_build_subject_gap_lines(base_report, weakest_subjects) or [
             "当前先以总分差和得分率作为判断依据，后续补充题型材料后再细化。"
         ],
         strength_breakthroughs=_build_strength_breakthroughs(best_subjects, performances) or [
             "先稳定优势科目，避免分数回落稀释总分提升。"
-        ],
-        execution_plan=_build_execution_plan(weakest_subjects, material_map) or [
-            "先把当前输入科目拆成题型模块，找出最集中的失分点。"
-        ],
-        stage_goals=_build_stage_goals(score_input, weakest_subjects) or [
-            "下一次考试先验证当前补救动作是否生效。"
         ],
         risk_alerts=[
             "没有在图片或文字里明确出现的题型、模块、章节名称，系统不会自行补充。",
@@ -159,12 +311,33 @@ def build_mock_enhanced_report(
             "按题型记录每部分满分、得分和主要失分原因，优先补充失分最多的两类模块。",
             "补充最近 2 到 3 次同类考试成绩，用于判断趋势是短期波动还是持续性问题。",
         ],
-        parent_focus=(
-            "家长下一步重点不是追问为什么没考好，而是要求孩子把每一科的失分整理成“概念不清、"
-            "审题失误、计算不稳、时间不够、表达不规范”五类，并只盯住下一次考试最影响总分的 1 到 2 科。"
-        ),
+        parent_focus="",
         elective_note="选科建议需要连续成绩、兴趣、学校课程资源和当地政策共同验证；当前增强分析给出的是优先建议、依据和备选方向，不是绝对承诺。",
     )
+
+
+def ensure_all_subject_insights(
+    report: EnhancedScoreReport,
+    score_input: ScoreInput,
+    base_report: ScoreReport | None = None,
+    history_records: list[HistoryExamRecord] | None = None,
+    materials: list[EnhancedMaterial] | None = None,
+) -> EnhancedScoreReport:
+    base_report = base_report or build_mock_report(score_input)
+    history_records = history_records or []
+    materials = materials or []
+    material_map = _build_material_map(materials)
+    trend_map = _build_history_trend_map(history_records)
+    insights = [
+        _build_enhanced_subject_insight(
+            subject,
+            trend_map.get(subject.name),
+            _get_material_for_subject(material_map, subject.name),
+            base_report,
+        )
+        for subject in score_input.subjects
+    ]
+    return report.model_copy(update={"subject_insights": insights})
 
 
 def _build_subject_performance(item) -> SubjectPerformance:
@@ -459,33 +632,35 @@ def _build_enhanced_subject_insight(
     base_report: ScoreReport,
 ) -> EnhancedSubjectInsight:
     if not _material_has_data(material):
-        missing = "由于缺少数据，因此无法进行深入分析。"
+        guidance = _build_missing_subject_guidance(item.name)
         return EnhancedSubjectInsight(
             name=item.name,
-            trend_judgment=missing,
-            diagnosis=missing,
-            evidence=missing,
-            action=missing,
-            next_target=missing,
-            score_gap_analysis=missing,
-            loss_focus=[missing],
-            stable_focus=[missing],
-            source_basis=[missing],
+            trend_judgment=str(guidance["trend_judgment"]),
+            diagnosis=str(guidance["diagnosis"]),
+            evidence=str(guidance["evidence"]),
+            action=str(guidance["action"]),
+            next_target=str(guidance["next_target"]),
+            analysis_rows=[],
+            section_advice=list(guidance.get("section_advice", [])),
+            analysis_summary=str(guidance["analysis_summary"]),
+            score_gap_analysis=str(guidance["analysis_summary"]),
+            loss_focus=list(guidance["loss_focus"]),
+            stable_focus=list(guidance["stable_focus"]),
+            source_basis=list(guidance["source_basis"]),
         )
 
-    module_summary = _format_extracted_modules(material.detail or "")
+    modules = _extract_module_scores(_combine_material_detail(material))
+    module_summary = _format_extracted_modules(_combine_material_detail(material))
     trend_text = _format_trend_text(trend)
     gap_text = _build_subject_gap_analysis(item, base_report)
-    diagnosis = (
-        f"{item.name}当前得分率约 {round(item.rate * 100, 1)}%，"
-        f"{module_summary if module_summary != '未提取到明确的模块分数。' else '补充材料可以继续细化为题型或模块分数。'}"
-    )
-    evidence = "；".join([part for part in [trend_text, module_summary] if part])
-    action = (
-        f"围绕{item.name}最弱模块做 20 到 30 分钟定向训练，"
-        "优先整理错因、步骤和易错题型，再做 1 组限时题。"
-    )
-    next_target = f"下次先把{item.name}提升 3 到 5 分，并确认同类错因是否减少。"
+    analysis_rows = _build_analysis_rows(item, material)
+    analysis_summary = _build_analysis_summary(item, material, module_summary, trend_text, gap_text)
+    subject_coaching = _build_subject_specific_guidance(item.name, modules, item)
+    section_advice = _build_section_advice(item.name, modules, item)
+    diagnosis = subject_coaching["diagnosis"]
+    evidence = "；".join([part for part in [trend_text, module_summary, subject_coaching["evidence"]] if part])
+    action = subject_coaching["action"]
+    next_target = subject_coaching["next_target"]
     return EnhancedSubjectInsight(
         name=item.name,
         trend_judgment=trend_text,
@@ -493,6 +668,9 @@ def _build_enhanced_subject_insight(
         evidence=evidence or diagnosis,
         action=action,
         next_target=next_target,
+        analysis_rows=analysis_rows,
+        section_advice=section_advice,
+        analysis_summary=analysis_summary,
         score_gap_analysis=gap_text,
         loss_focus=_build_loss_focus(item.name, material),
         stable_focus=_build_stable_focus(item.name, item, material),
@@ -500,14 +678,289 @@ def _build_enhanced_subject_insight(
     )
 
 
+def _build_analysis_rows(item: SubjectPerformance, material: EnhancedMaterial | None) -> list[EnhancedAnalysisRow]:
+    if not _material_has_data(material):
+        return []
+
+    modules = _extract_module_scores(_combine_material_detail(material))
+    if modules:
+        rows = [
+            EnhancedAnalysisRow(
+                content=str(module["name"]),
+                score=round(float(module["score"]), 1),
+                full_score=round(float(module["full_score"]), 1),
+                rate=round(float(module["rate"]), 1),
+            )
+            for module in modules
+        ]
+        rows.append(
+            EnhancedAnalysisRow(
+                content=f"{item.name}总分",
+                score=round(item.score, 1),
+                full_score=round(item.full_score, 1),
+                rate=round(item.rate * 100, 1),
+            )
+        )
+        return rows
+
+    return [
+        EnhancedAnalysisRow(
+            content=f"{item.name}总分",
+            score=round(item.score, 1),
+            full_score=round(item.full_score, 1),
+            rate=round(item.rate * 100, 1),
+        )
+    ]
+
+
+def _build_section_advice(
+    subject_name: str,
+    modules: list[dict[str, Any]],
+    item: SubjectPerformance,
+) -> list[str]:
+    if not modules:
+        if _normalize_subject_key(subject_name) == "英语":
+            return ["英语暂未拆出章节分数，建议优先补听力、阅读理解、完形填空、语法填空、应用文写作和读后续写的分项分数。"]
+        return [f"{subject_name}暂未拆出章节分数，建议先补充到题型/章节级材料，再做分章节建议。"]
+
+    if _normalize_subject_key(subject_name) == "英语":
+        ordered_sections = [
+            ("听力", ["听力", "听说", "listening"]),
+            ("阅读理解", ["阅读理解", "阅读", "reading"]),
+            ("完形填空", ["完形填空", "完形", "cloze"]),
+            ("语法填空", ["语法填空", "语法", "grammar"]),
+            ("应用文写作", ["应用文写作", "应用文", "writing"]),
+            ("读后续写", ["读后续写", "概要写作", "续写", "continuation"]),
+        ]
+        advice = []
+        for title, aliases in ordered_sections:
+            matched = next((module for module in modules if _module_matches_alias(module["name"], aliases)), None)
+            if matched:
+                advice.append(_build_section_advice_line(title, matched))
+        return advice or [f"{subject_name}已提取到分项，但未匹配到可识别的英语章节名称。"]
+
+    advice = []
+    for module in sorted(modules, key=lambda module: (float(module["rate"]), float(module["loss"]))):
+        advice.append(_build_section_advice_line(str(module["name"]), module))
+    if not advice:
+        advice.append(f"{subject_name}暂未提取到有效章节建议。")
+    return advice
+
+
+def _build_section_advice_line(section_name: str, module: dict[str, Any]) -> str:
+    rate = round(float(module["rate"]), 1)
+    score = round(float(module["score"]), 1)
+    full_score = round(float(module["full_score"]), 1)
+    if rate >= 85:
+        return f"{section_name} {score}/{full_score}，得分率{rate}%，建议保持节奏并用限时训练防止粗心失分。"
+    if rate >= 70:
+        return f"{section_name} {score}/{full_score}，得分率{rate}%，建议继续补中档题和常见错因。"
+    return f"{section_name} {score}/{full_score}，得分率{rate}%，建议优先补基础方法、典型题和错因复盘。"
+
+
+def _build_analysis_summary(
+    item: SubjectPerformance,
+    material: EnhancedMaterial | None,
+    module_summary: str,
+    trend_text: str,
+    gap_text: str,
+) -> str:
+    if not _material_has_data(material):
+        return "由于缺少数据，该科目无法进行深入分析。"
+
+    parts = [f"{item.name}当前得分率约 {round(item.rate * 100, 1)}%。"]
+    if module_summary and module_summary != "未提取到明确的模块分数。":
+        parts.append(f"模块拆解显示：{module_summary}")
+    if trend_text and trend_text != "历史趋势不足，暂不判断变化方向。":
+        parts.append(trend_text)
+    if gap_text:
+        parts.append(gap_text)
+    return "".join(parts)
+
+
+def _build_subject_specific_guidance(
+    subject_name: str,
+    modules: list[dict[str, Any]],
+    item: SubjectPerformance,
+) -> dict[str, str]:
+    subject = _normalize_subject_key(subject_name)
+    overall_rate = round(item.rate * 100, 1)
+    if not modules:
+        base = {
+            "diagnosis": f"{subject_name}当前得分率约 {overall_rate}%，建议继续补齐题型材料后再细化到各部分。",
+            "evidence": "材料中暂未提取到可拆分的分项分数。",
+            "action": _build_subject_action_text(subject_name, None, item, modules),
+            "next_target": f"下次把{subject_name}提升 3 到 5 分，并记录至少 1 个具体失分原因。",
+        }
+        return base
+
+    ranked = sorted(modules, key=lambda module: (float(module["rate"]), float(module["loss"])), reverse=True)
+    weakest = ranked[-1]
+    strongest = ranked[0]
+    row_text = "；".join(
+        [
+            f"{module['name']} {module['score']}/{module['full_score']}（{module['rate']}%）"
+            for module in modules
+        ]
+    )
+    if subject == "英语":
+        part_guidance = _build_english_part_guidance(modules)
+        diagnosis = f"英语整体得分率约 {overall_rate}%，分项表现为：{row_text}。"
+        evidence = f"最弱分项是{weakest['name']}，最稳分项是{strongest['name']}。"
+        action = _build_subject_action_text(subject_name, part_guidance, item, modules)
+        next_target = part_guidance["next_target"]
+        return {
+            "diagnosis": diagnosis,
+            "evidence": evidence,
+            "action": action,
+            "next_target": next_target,
+        }
+
+    diagnosis = f"{subject_name}整体得分率约 {overall_rate}%，分项表现为：{row_text}。"
+    evidence = f"当前最弱部分是{weakest['name']}，最稳部分是{strongest['name']}。"
+    action = _build_subject_action_text(subject_name, None, item, modules)
+    next_target = f"下次先把{subject_name}提升 3 到 5 分，并让最弱部分至少回升 5 个百分点。"
+    return {
+        "diagnosis": diagnosis,
+        "evidence": evidence,
+        "action": action,
+        "next_target": next_target,
+    }
+
+
+def _build_subject_action_text(
+    subject_name: str,
+    part_guidance: dict[str, str] | None,
+    item: SubjectPerformance,
+    modules: list[dict[str, Any]],
+) -> str:
+    if part_guidance and part_guidance.get("action"):
+        return part_guidance["action"]
+
+    if not modules:
+        return f"围绕{subject_name}的基础题、典型题和错因清单做 20 到 30 分钟定向训练。"
+
+    ranked = sorted(modules, key=lambda module: (float(module["rate"]), float(module["loss"])))
+    weakest = ranked[0]
+    strongest = ranked[-1]
+    overall_rate = round(item.rate * 100, 1)
+    return (
+        f"{subject_name}整体得分率约{overall_rate}%，优先补{weakest['name']}，"
+        f"再用限时训练巩固{strongest['name']}；"
+        f"每周至少做2次专项训练，每次20到30分钟。"
+    )
+
+
+def _build_english_part_guidance(modules: list[dict[str, Any]]) -> dict[str, str]:
+    parts = [
+        ("听力", ["听力", "听说", "listening"]),
+        ("阅读理解", ["阅读理解", "阅读", "reading"]),
+        ("完形填空", ["完形填空", "完形", "cloze"]),
+        ("语法填空", ["语法填空", "语法", "grammar"]),
+        ("应用文写作", ["应用文写作", "应用文", "writing"]),
+        ("读后续写", ["读后续写", "概要写作", "续写", "continuation"]),
+    ]
+    matched = []
+    for title, aliases in parts:
+        match = next((module for module in modules if _module_matches_alias(module["name"], aliases)), None)
+        if match:
+            matched.append((title, match))
+
+    if not matched:
+        return {
+            "action": "先把英语按听力、阅读理解、完形填空、语法填空、应用文写作、读后续写拆开复盘，再分别找出每块失分原因。",
+            "next_target": "下次先让英语各分项都能看清得分，再分别验证哪一块最拖后腿。",
+        }
+
+    actions = []
+    targets = []
+    for title, module in matched:
+        rate = round(float(module["rate"]), 1)
+        score = module["score"]
+        full_score = module["full_score"]
+        loss = round(float(module["loss"]), 1)
+        if rate >= 85:
+            actions.append(f"{title}继续保持当前节奏，每周做1次限时训练，重点防止粗心失分。")
+        elif rate >= 70:
+            actions.append(f"{title}重点补中档题和常见错误，每周2次专项训练。")
+        else:
+            actions.append(f"{title}先补基础词汇、题型方法和错因，连续3天做短时强化。")
+        targets.append(f"{title}下次至少提升 3 到 5 分")
+
+    strongest = max(matched, key=lambda item: float(item[1]["rate"]))[0]
+    weakest = min(matched, key=lambda item: float(item[1]["rate"]))[0]
+    return {
+        "action": "；".join(actions),
+        "next_target": f"英语先把{weakest}补起来，同时保持{strongest}的稳定；" + "，".join(targets[:3]),
+    }
+
+
 def _material_has_data(material: EnhancedMaterial | None) -> bool:
     if material is None:
         return False
-    return bool((material.detail or "").strip() or (material.image_url or "").strip())
+    detail = (material.detail or "").strip()
+    image_url = (material.image_url or "").strip()
+    image_name = (material.image_name or "").strip()
+    return bool(detail or image_url or image_name)
+
+
+def _subject_has_any_material(material: EnhancedMaterial | None) -> bool:
+    if not _material_has_data(material):
+        return False
+    detail = (material.detail or "").strip()
+    if detail:
+        return True
+    return bool((material.image_url or "").strip() or (material.image_name or "").strip())
+
+
+def _normalize_subject_key(subject: str) -> str:
+    return re.sub(r"\s+", "", str(subject or "")).strip().lower()
+
+
+def _combine_material_detail(material: EnhancedMaterial | None) -> str:
+    if not material:
+        return ""
+    parts = [
+        (material.detail or "").strip(),
+        (material.image_name or "").strip(),
+    ]
+    return "；".join([part for part in parts if part])
 
 
 def _build_material_map(materials: list[EnhancedMaterial]) -> dict[str, EnhancedMaterial]:
-    return {material.subject: material for material in materials if material.subject}
+    grouped: dict[str, list[EnhancedMaterial]] = {}
+    for material in materials:
+        key = _normalize_subject_key(material.subject)
+        if not key:
+            continue
+        grouped.setdefault(key, []).append(material)
+
+    merged: dict[str, EnhancedMaterial] = {}
+    for key, group in grouped.items():
+        merged[key] = EnhancedMaterial(
+            subject=group[0].subject,
+            input_type="mixed" if len(group) > 1 else (group[0].input_type or "text"),
+            detail="\n".join(
+                [
+                    part
+                    for part in [
+                        (item.detail or "").strip() or (item.image_name or "").strip()
+                        for item in group
+                    ]
+                    if part
+                ]
+            ),
+            image_url="；".join([item.image_url for item in group if item.image_url]),
+            image_name="；".join([item.image_name for item in group if item.image_name]),
+        )
+    return merged
+
+
+def _get_material_for_subject(
+    material_map: dict[str, EnhancedMaterial],
+    subject: str,
+) -> EnhancedMaterial | None:
+    return material_map.get(_normalize_subject_key(subject))
 
 
 def _build_history_trend_map(history_records: list[HistoryExamRecord]) -> dict[str, dict[str, object]]:
@@ -565,7 +1018,7 @@ def _format_trend_text(trend: dict[str, object] | None) -> str:
 
 def _build_subject_diagnosis(item: SubjectPerformance, material: EnhancedMaterial | None) -> str:
     if not _material_has_data(material):
-        return "由于缺少数据，因此无法进行深入分析。"
+        return "由于缺少数据，该科目无法进行深入分析。"
     modules = _extract_module_scores(material.detail or "")
     if modules:
         top_module = modules[0]
@@ -579,7 +1032,7 @@ def _build_subject_evidence(
     material: EnhancedMaterial | None,
 ) -> str:
     if not _material_has_data(material):
-        return "由于缺少数据，因此无法进行深入分析。"
+        return "由于缺少数据，该科目无法进行深入分析。"
     parts = [f"{item.name}得分率约 {round(item.rate * 100, 1)}%。"]
     trend_text = _format_trend_text(trend)
     if trend_text:
@@ -592,13 +1045,13 @@ def _build_subject_evidence(
 
 def _build_subject_action(item: SubjectPerformance, material: EnhancedMaterial | None) -> str:
     if not _material_has_data(material):
-        return "由于缺少数据，因此无法进行深入分析。请补充试卷照片或题型得分。"
+        return "由于缺少数据，该科目无法进行深入分析。"
     return f"围绕{item.name}的薄弱模块做 20 到 30 分钟定向训练，并复盘同类错因。"
 
 
 def _build_subject_target(item: SubjectPerformance, material: EnhancedMaterial | None) -> str:
     if not _material_has_data(material):
-        return "由于缺少数据，因此无法进行深入分析。"
+        return "由于缺少数据，该科目无法进行深入分析。"
     return f"下次把{item.name}提升 3 到 5 分，先验证薄弱模块是否改善。"
 
 
@@ -613,7 +1066,7 @@ def _build_subject_gap_analysis(item: SubjectPerformance, base_report: ScoreRepo
 
 def _build_loss_focus(subject_name: str, material: EnhancedMaterial | None) -> list[str]:
     if not _material_has_data(material):
-        return ["由于缺少数据，因此无法进行深入分析。"]
+        return ["由于缺少数据，该科目无法进行深入分析。"]
     modules = _extract_module_scores(material.detail or "")
     if modules:
         return [f"优先补 {modules[0]['name']} 一类模块。"]
@@ -622,7 +1075,7 @@ def _build_loss_focus(subject_name: str, material: EnhancedMaterial | None) -> l
 
 def _build_stable_focus(subject_name: str, item: SubjectPerformance, material: EnhancedMaterial | None) -> list[str]:
     if not _material_has_data(material):
-        return ["由于缺少数据，因此无法进行深入分析。"]
+        return ["由于缺少数据，该科目无法进行深入分析。"]
     return [f"{subject_name}当前得分率约 {round(item.rate * 100, 1)}%，先稳住已有得分较高的部分。"]
 
 
@@ -632,29 +1085,11 @@ def _build_source_basis(
     material: EnhancedMaterial | None,
 ) -> list[str]:
     if not _material_has_data(material):
-        return ["由于缺少数据，因此无法进行深入分析。"]
+        return ["由于缺少数据，该科目无法进行深入分析。"]
     basis = [f"基于{subject_name}补充材料和现有成绩。"]
     if trend:
         basis.append(str(trend.get("direction") or "历史趋势不足，暂不判断变化方向。"))
     return basis
-
-
-def _build_core_diagnosis(
-    score_input: ScoreInput,
-    history_records: list[HistoryExamRecord],
-    material_map: dict[str, EnhancedMaterial],
-    weakest_subjects: list[str],
-) -> list[str]:
-    total_score = round(sum(item.score for item in score_input.subjects), 1)
-    lines = [f"本次总分 {total_score} 分，先围绕 {', '.join(weakest_subjects[:3]) or '当前最弱学科'} 处理。"]
-    missing = [item.name for item in score_input.subjects if not _material_has_data(material_map.get(item.name))]
-    if missing:
-        lines.append(f"{'、'.join(missing)}科目由于缺少数据，因此无法进行深入分析。")
-    if len(history_records) >= 2:
-        lines.append("历史记录已足够形成弱趋势判断，可继续观察连续变化。")
-    else:
-        lines.append("历史记录较少，趋势判断先作为辅助，不作为稳定结论。")
-    return lines
 
 
 def _build_subject_gap_lines(base_report: ScoreReport, weakest_subjects: list[str]) -> list[str]:
@@ -682,20 +1117,3 @@ def _build_strength_breakthroughs(best_subjects: list[str], performances: list[S
     return lines
 
 
-def _build_execution_plan(weakest_subjects: list[str], material_map: dict[str, EnhancedMaterial]) -> list[str]:
-    lines: list[str] = []
-    for subject in weakest_subjects[:3]:
-        material = material_map.get(subject)
-        if not _material_has_data(material):
-            lines.append(f"{subject}由于缺少数据，因此无法进行深入分析。")
-        else:
-            lines.append(f"{subject}先用 20 到 30 分钟拆题型训练，再做 1 组限时题。")
-    return lines
-
-
-def _build_stage_goals(score_input: ScoreInput, weakest_subjects: list[str]) -> list[str]:
-    total_score = round(sum(item.score for item in score_input.subjects), 1)
-    lines = [f"下一次考试先把总分目标定在 {total_score + 10:.1f} 分以上。"]
-    if weakest_subjects:
-        lines.append(f"{weakest_subjects[0]}优先提升 5 到 10 分。")
-    return lines

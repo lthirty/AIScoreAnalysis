@@ -144,6 +144,14 @@
   font-size: 28rpx;
 }
 
+.trend-axis-labels {
+  color: #94a3b8;
+  display: flex;
+  font-size: 20rpx;
+  justify-content: space-between;
+  margin-top: 8rpx;
+}
+
 .trend-explain {
   margin-bottom: 18rpx;
 }
@@ -151,11 +159,18 @@
 .trend-brief,
 .trend-detail {
   color: #718096;
-  font-size: 24rpx;
-  line-height: 1.6;
+  font-size: 26rpx;
+  line-height: 1.65;
 }
 
 .trend-brief {
+  margin-bottom: 10rpx;
+}
+
+.enhanced-subsection-title {
+  color: #374151;
+  font-size: 32rpx;
+  font-weight: 700;
   margin-bottom: 10rpx;
 }
 
@@ -632,6 +647,35 @@
   display: flex;
   gap: 12rpx;
   justify-content: space-between;
+}
+
+.analysis-summary {
+  color: #475569;
+  font-size: 24rpx;
+  line-height: 1.7;
+  margin: 10rpx 0 8rpx;
+}
+
+.section-advice-list {
+  background: #f8fbff;
+  border: 1rpx solid #e5eef7;
+  border-radius: 12rpx;
+  margin-top: 12rpx;
+  padding: 14rpx 16rpx;
+}
+
+.section-advice-title {
+  color: #1f2937;
+  font-size: 26rpx;
+  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.section-advice-item {
+  color: #475569;
+  font-size: 24rpx;
+  line-height: 1.65;
+  margin-top: 6rpx;
 }
 
 .elective-option {

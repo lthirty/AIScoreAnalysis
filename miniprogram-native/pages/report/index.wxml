@@ -56,13 +56,6 @@
           <view class="brief-metric-label">最高总分</view>
         </view>
       </view>
-      <view class="brief-advice-title">学习建议</view>
-      <view wx:if="{{briefAnalysis && briefAnalysis.advice && briefAnalysis.advice.length}}" class="brief-advice-list">
-        <view wx:for="{{briefAnalysis.advice}}" wx:for-item="adviceItem" wx:key="index" class="brief-advice-item">
-          <text class="brief-advice-dot">•</text>
-          <text class="brief-advice-text">{{adviceItem}}</text>
-        </view>
-      </view>
       <view class="export-actions">
         <button class="primary mini-button" disabled="{{exportingImage}}" bindtap="exportReportAsImage">{{exportingImage ? '导出中' : '导出图片'}}</button>
         <button class="secondary mini-button" disabled="{{exportingPdf}}" bindtap="exportReportAsPdf">{{exportingPdf ? '导出中' : '导出PDF'}}</button>
@@ -162,6 +155,10 @@
             <text class="tag {{item.diff >= 0 ? 'tag-green' : 'tag-amber'}}">{{item.diff >= 0 ? '+' : ''}}{{item.diff || 0}}</text>
           </view>
           <canvas type="2d" class="report-subject-trend-canvas"></canvas>
+          <view class="trend-axis-labels">
+            <text>时间</text>
+            <text>分数</text>
+          </view>
         </view>
       </view>
     </view>
@@ -172,7 +169,7 @@
         <view class="enhanced-copy">
           <view class="enhanced-title">解锁 AI 增强分析</view>
           <view class="enhanced-desc">
-            基础分析已经给出总分、分差、趋势和选科方向。增强分析会继续整合{{city}}与{{payload.student.grade}}特点、优势科目{{strongSubject ? '（' + strongSubject + '）' : ''}}、待提升科目{{weakSubject ? '（' + weakSubject + '）' : ''}}和阶段目标，生成更适合家长决策和学生执行的深度报告。
+            基础分析已经给出总分、分差、趋势和选科方向。增强分析会继续整合{{city}}与{{payload.student.grade}}特点、优势科目{{strongSubject ? '（' + strongSubject + '）' : ''}}、待提升科目{{weakSubject ? '（' + weakSubject + '）' : ''}}以及题型级证据，生成更适合家长决策和学生执行的深度报告。
           </view>
           <view wx:if="{{!enhancedPurchased && !enhancedReport}}" class="enhanced-price">正式版付费解锁 · 当前调试阶段点击即模拟购买</view>
         </view>
@@ -277,12 +274,9 @@
         </view>
       </view>
 
-      <view wx:if="{{enhancedReport}}" class="report-card accent">
-        <view class="score-main">{{enhancedReport.summary}}</view>
-      </view>
       <view wx:if="{{enhancedReport}}" class="report-summary">{{enhancedReport.summary}}</view>
       <view wx:if="{{enhancedDetail && enhancedDetail.subjectInsights && enhancedDetail.subjectInsights.length}}" class="panel-subsection">
-        <view class="section-subtitle">各科深入分析</view>
+        <view class="enhanced-subsection-title">各科深入分析</view>
         <view wx:for="{{enhancedDetail.subjectInsights}}" wx:for-item="insight" wx:key="name" class="insight-depth-card">
           <view class="insight-depth-head">
             <view class="score-main">{{insight.name}}</view>
@@ -292,124 +286,43 @@
           <view class="score-sub">依据：{{insight.evidence}}</view>
           <view class="score-sub">下一步：{{insight.action}}</view>
           <view class="score-sub">下次目标：{{insight.next_target}}</view>
-        </view>
-      </view>
-      <view wx:if="{{enhancedDetail && enhancedDetail.coreDiagnosis && enhancedDetail.coreDiagnosis.length}}" class="panel-subsection">
-        <view class="section-subtitle">核心诊断</view>
-        <view wx:for="{{enhancedDetail.coreDiagnosis}}" wx:key="index" class="plan-card">
-          <view class="workflow-index">{{index + 1}}</view>
-          <view class="workflow-text">{{item}}</view>
+          <view wx:if="{{insight.analysis_summary}}" class="analysis-summary">{{insight.analysis_summary}}</view>
+          <view wx:if="{{insight.analysis_rows && insight.analysis_rows.length}}" class="analysis-table">
+            <view class="analysis-table-head">
+              <text>内容</text>
+              <text>得分</text>
+              <text>总分</text>
+              <text>得分率</text>
+            </view>
+            <view wx:for="{{insight.analysis_rows}}" wx:for-item="row" wx:key="index" class="analysis-table-row">
+              <text class="analysis-table-content">{{row.content}}</text>
+              <text>{{row.score}}</text>
+              <text>{{row.full_score}}</text>
+              <text class="text-good">{{row.rate}}%</text>
+            </view>
+          </view>
+          <view wx:if="{{insight.section_advice && insight.section_advice.length}}" class="section-advice-list">
+            <view class="section-advice-title">章节独立建议</view>
+            <view wx:for="{{insight.section_advice}}" wx:key="index" class="section-advice-item">{{item}}</view>
+          </view>
         </view>
       </view>
       <view wx:if="{{enhancedDetail && enhancedDetail.strengthBreakthroughs && enhancedDetail.strengthBreakthroughs.length}}" class="panel-subsection">
-        <view class="section-subtitle">优势突破点</view>
+        <view class="enhanced-subsection-title">优势突破点</view>
         <view wx:for="{{enhancedDetail.strengthBreakthroughs}}" wx:key="index" class="plan-card">
           <view class="workflow-index">{{index + 1}}</view>
           <view class="workflow-text">{{item}}</view>
         </view>
       </view>
-      <view wx:if="{{enhancedDetail && enhancedDetail.executionPlan && enhancedDetail.executionPlan.length}}" class="panel-subsection">
-        <view class="section-subtitle">执行计划</view>
-        <view wx:for="{{enhancedDetail.executionPlan}}" wx:key="index" class="plan-card">
-          <view class="workflow-index">{{index + 1}}</view>
-          <view class="workflow-text">{{item}}</view>
-        </view>
-      </view>
-      <view wx:if="{{enhancedDetail && enhancedDetail.stageGoals && enhancedDetail.stageGoals.length}}" class="panel-subsection">
-        <view class="section-subtitle">阶段目标</view>
-        <view wx:for="{{enhancedDetail.stageGoals}}" wx:key="index" class="plan-card">
-          <view class="workflow-index">{{index + 1}}</view>
-          <view class="workflow-text">{{item}}</view>
-        </view>
-      </view>
       <view wx:if="{{enhancedDetail && enhancedDetail.riskAlerts && enhancedDetail.riskAlerts.length}}" class="panel-subsection">
-        <view class="section-subtitle">风险提醒</view>
+        <view class="enhanced-subsection-title">风险提醒</view>
         <view wx:for="{{enhancedDetail.riskAlerts}}" wx:key="index" class="goal-line">{{item}}</view>
       </view>
       <view wx:if="{{enhancedDetail && enhancedDetail.followupMaterials && enhancedDetail.followupMaterials.length}}" class="panel-subsection">
-        <view class="section-subtitle">建议补充材料</view>
+        <view class="enhanced-subsection-title">建议补充材料</view>
         <view wx:for="{{enhancedDetail.followupMaterials}}" wx:key="index" class="goal-line">{{item}}</view>
       </view>
-      <view wx:if="{{enhancedDetail && enhancedDetail.parentFocus}}" class="panel-subsection">
-        <view class="section-subtitle">家长关注点</view>
-        <view class="notice">{{enhancedDetail.parentFocus}}</view>
-      </view>
-      <view wx:if="{{enhancedReport}}" class="report-metric-grid">
-        <view class="report-metric">
-          <view class="metric-value">{{report.overview.average_score}}</view>
-          <view class="metric-label">平均分</view>
-        </view>
-        <view class="report-metric">
-          <view class="metric-value">{{report.overview.total_score}}</view>
-          <view class="metric-label">个人总分</view>
-        </view>
-        <view class="report-metric">
-          <view class="metric-value">{{report.overview.reference_total_score || '-'}}</view>
-          <view class="metric-label">最高总分</view>
-        </view>
-      </view>
-
-      <view wx:if="{{enhancedReport}}" class="section-subtitle">本次考试各科成绩对比</view>
-      <view wx:if="{{enhancedReport && report.subject_comparison && report.subject_comparison.length}}" class="score-table">
-        <view class="score-table-head">
-          <text>科目</text>
-          <text>自己</text>
-          <text>最高</text>
-          <text>分差</text>
-          <text>满分</text>
-        </view>
-        <view wx:for="{{report.subject_comparison}}" wx:key="name" class="score-table-row">
-          <text class="comparison-name">{{item.name}}</text>
-          <text>{{item.score}}</text>
-          <text class="text-accent">{{item.reference_score || '-'}}</text>
-          <text class="{{item.gap_to_reference && item.gap_to_reference > 0 ? 'text-warn' : 'text-good'}}">{{item.gap_to_reference || '-'}}</text>
-          <text class="text-gray-400">{{item.full_score}}</text>
-        </view>
-      </view>
-
-      <view wx:if="{{enhancedReport}}" class="grid-two">
-        <view class="insight-card strength-card">
-          <view class="section-subtitle compact-title">优势科目</view>
-          <view wx:if="{{report.strengths && report.strengths.length}}">
-            <view wx:for="{{report.strengths}}" wx:for-item="strength" wx:key="name" class="mini-insight">
-              <view class="score-main">{{strength.name}}</view>
-              <view class="score-sub">{{strength.evidence}}</view>
-            </view>
-          </view>
-        </view>
-        <view class="insight-card weakness-card">
-          <view class="section-subtitle compact-title">待提升科目</view>
-          <view wx:if="{{report.weaknesses && report.weaknesses.length}}">
-            <view wx:for="{{report.weaknesses}}" wx:for-item="weakness" wx:key="name" class="mini-insight">
-              <view class="score-main">{{weakness.name}}</view>
-              <view class="score-sub">{{weakness.evidence}}</view>
-            </view>
-          </view>
-        </view>
-      </view>
-
-      <view wx:if="{{enhancedReport}}" class="section-subtitle">学习建议</view>
-      <view wx:if="{{enhancedReport && report.learning_advice && report.learning_advice.length}}" class="workflow">
-        <view wx:for="{{report.learning_advice}}" wx:key="index" class="workflow-item">
-          <view class="workflow-index">{{index + 1}}</view>
-          <view class="workflow-text">{{item}}</view>
-        </view>
-      </view>
-
-      <view wx:if="{{enhancedReport}}" class="section-subtitle">高中选科建议</view>
-      <view wx:if="{{enhancedReport && report.elective_plan && report.elective_plan.recommendation}}" class="elective-highlight">
-        <view class="elective-label">直接建议</view>
-        <view class="elective-combo">{{report.elective_plan.recommendation}}</view>
-        <view class="elective-subhead">建议依据</view>
-        <view class="elective-reason">{{report.elective_plan.basis}}</view>
-      </view>
-      <view wx:if="{{enhancedDetail && enhancedDetail.electiveNote}}" class="notice elective-note-box">{{enhancedDetail.electiveNote}}</view>
-      <view wx:if="{{enhancedReport && report.elective_plan && report.elective_plan.alternatives && report.elective_plan.alternatives.length}}" class="section-subtitle elective-subtitle">其他备选建议及依据</view>
-      <view wx:if="{{enhancedReport && report.elective_plan && report.elective_plan.alternatives}}" wx:for="{{report.elective_plan.alternatives}}" wx:for-item="option" wx:key="combo" class="elective-option">
-        <view class="score-main">{{option.combo}}</view>
-        <view class="score-sub">{{option.reason}}</view>
-      </view>
-      </view>
+    </view>
 
     <view wx:if="{{enhancedLoading}}" class="report-mask">
       <view class="report-progress">

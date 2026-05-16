@@ -15,7 +15,7 @@ function drawLineChart(canvas, width, height, points, options = {}) {
   ctx.scale(dpr, dpr)
   ctx.clearRect(0, 0, width, height)
 
-  const padding = options.padding || { top: 18, right: 18, bottom: 28, left: 30 }
+  const padding = options.padding || { top: 18, right: 24, bottom: 34, left: 40 }
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
   const scores = points.map((point) => Number(point.score) || 0)
@@ -24,6 +24,8 @@ function drawLineChart(canvas, width, height, points, options = {}) {
   const yMin = Math.max(0, Math.floor((minScore - 10) / 10) * 10)
   const yMax = Math.ceil((maxScore + 10) / 10) * 10
   const yRange = Math.max(10, yMax - yMin)
+  const xLabels = points.map((point) => point.label || point.date || '')
+  const xTickCount = Math.min(points.length, 5)
 
   ctx.strokeStyle = options.gridColor || '#dbe4ee'
   ctx.lineWidth = 1
@@ -33,6 +35,14 @@ function drawLineChart(canvas, width, height, points, options = {}) {
     ctx.moveTo(padding.left, y)
     ctx.lineTo(width - padding.right, y)
     ctx.stroke()
+  }
+
+  ctx.fillStyle = options.axisColor || '#64748b'
+  ctx.font = `${options.axisFontSize || 10}px sans-serif`
+  for (let i = 0; i < 3; i += 1) {
+    const score = Math.round((yMax - (yRange * i) / 2) * 10) / 10
+    const y = padding.top + (chartHeight * i) / 2
+    ctx.fillText(String(score), 4, y + 3)
   }
 
   const pointNodes = points.map((point, index) => {
@@ -80,6 +90,20 @@ function drawLineChart(canvas, width, height, points, options = {}) {
       ctx.fillText(label, point.x - 12, height - 8)
     }
   })
+
+  if (xLabels.length) {
+    ctx.fillStyle = options.axisColor || '#64748b'
+    ctx.font = `${options.axisFontSize || 10}px sans-serif`
+    const tickIndexes = xTickCount === 1
+      ? [0]
+      : Array.from(new Set(Array.from({ length: xTickCount }, (_, index) => Math.round(index * (points.length - 1) / (xTickCount - 1)))))
+    tickIndexes.forEach((index) => {
+      const point = pointNodes[index]
+      if (!point) return
+      const label = xLabels[index] || ''
+      ctx.fillText(label.length > 8 ? label.slice(5) : label, Math.max(0, point.x - 16), height - 8)
+    })
+  }
 }
 
 module.exports = {

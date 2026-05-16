@@ -1,5 +1,5 @@
 const { request } = require('../../utils/request')
-const { appendHistoryRecord, getScoreDraft, setLastReport } = require('../../utils/storage')
+const { appendHistoryRecord, getHistoryRecords, getScoreDraft, setHistoryRecords, setLastReport } = require('../../utils/storage')
 const { calculateTotalScore } = require('../../utils/trend')
 const { VERSION_LABEL } = require('../../utils/version')
 
@@ -208,6 +208,38 @@ Page({
       || message.includes('bad gateway')
   },
 
+  saveHistoryRecordWithConflictPrompt(record) {
+    const sameDateRecords = getHistoryRecords().filter((item) => item.examDate === record.examDate && record.examDate)
+    if (!sameDateRecords.length) {
+      appendHistoryRecord(record)
+      return Promise.resolve()
+    }
+
+    return new Promise((resolve) => {
+      wx.showModal({
+        title: '发现同日期成绩',
+        content: `${record.examDate} 已有成绩记录。是否使用新成绩覆盖旧记录？取消则保留旧记录，不保存本次记录。`,
+        confirmText: '覆盖旧记录',
+        cancelText: '保留旧记录',
+        success: (res) => {
+          if (res && res.confirm) {
+            const nextRecords = [...getHistoryRecords().filter((item) => item.examDate !== record.examDate), {
+              ...record,
+              createdAt: new Date().toISOString()
+            }]
+              .sort((a, b) => new Date(a.examDate || a.createdAt || 0).getTime() - new Date(b.examDate || b.createdAt || 0).getTime())
+              .slice(-30)
+            setHistoryRecords(nextRecords)
+          }
+          resolve()
+        },
+        fail: () => {
+          resolve()
+        }
+      })
+    })
+  },
+
   async analyze() {
     if (this.data.loading) return
     this.setData({
@@ -228,7 +260,7 @@ Page({
       this.setReportProgress(2, '任务已提交，正在连接 AI 大模型')
       const report = await this.waitForReport(job.job_id)
       setLastReport({ payload, report })
-      appendHistoryRecord({
+      const nextHistoryRecord = {
         id: `${payload.exam.date || payload.exam.name || Date.now()}-${Date.now()}`,
         city: payload.student.city,
         grade: payload.student.grade,
@@ -237,7 +269,8 @@ Page({
         totalScore: calculateTotalScore(payload.subjects),
         subjects: payload.subjects,
         createdAt: new Date().toISOString()
-      })
+      }
+      await this.saveHistoryRecordWithConflictPrompt(nextHistoryRecord)
       wx.navigateTo({ url: '/pages/report/index' })
     } catch (error) {
       if (this._pageAlive !== false) {

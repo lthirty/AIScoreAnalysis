@@ -2,7 +2,7 @@ const { request } = require('../../utils/request')
 const { showError } = require('../../utils/error')
 const { SUBJECTS, EDUCATION_DEPT_LINKS } = require('../../utils/constants')
 const { uploadFileForUrl } = require('../../utils/upload')
-const { getEnhancedReport, getHistoryRecords, getLastReport, getPreferences, setEnhancedReport } = require('../../utils/storage')
+const { getHistoryRecords, getLastReport, getPreferences, setEnhancedReport } = require('../../utils/storage')
 const { buildTrendSummary } = require('../../utils/trend')
 const { drawLineChart } = require('../../utils/trendCanvas')
 const { VERSION_LABEL } = require('../../utils/version')
@@ -32,6 +32,25 @@ function createEmptySubjectGroup(subject = SUBJECTS[0]) {
   }
 }
 
+function normalizeSubjectName(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const compact = raw.replace(/\s+/g, '').toLowerCase()
+  const aliasMap = {
+    chinese: '语文',
+    math: '数学',
+    mathematics: '数学',
+    english: '英语',
+    physics: '物理',
+    chemistry: '化学',
+    biology: '生物',
+    history: '历史',
+    geography: '地理',
+    politics: '政治'
+  }
+  return aliasMap[compact] || raw
+}
+
 function buildBriefAnalysisDisplay(report) {
   const overview = (report && report.overview) || {}
   const advice = Array.isArray(report && report.learning_advice)
@@ -49,7 +68,7 @@ function buildBriefAnalysisDisplay(report) {
 function buildMissingSubjectNotice(missingSubjects) {
   const subjects = (missingSubjects || []).map((item) => String(item || '').trim()).filter(Boolean)
   if (!subjects.length) return ''
-  return `${subjects.join('、')}科目由于缺少数据，因此无法进行深入分析，其余已导入数据科目开始进行深入分析。`
+  return `${subjects.join('、')}科目由于缺少数据，暂无法进行深入分析，其余已导入数据科目开始进行深入分析。`
 }
 
 function formatDuration(ms) {
@@ -86,27 +105,19 @@ function buildEnhancedDebugHint(status, elapsedMs, materialCount, uploadCount, e
 function buildEnhancedDetailSections(report) {
   if (!report) return {
     subjectInsights: [],
-    coreDiagnosis: [],
     subjectGapAnalysis: [],
     strengthBreakthroughs: [],
-    executionPlan: [],
-    stageGoals: [],
     riskAlerts: [],
     followupMaterials: [],
-    parentFocus: '',
     electiveNote: ''
   }
 
   return {
     subjectInsights: Array.isArray(report.subject_insights) ? report.subject_insights : [],
-    coreDiagnosis: Array.isArray(report.core_diagnosis) ? report.core_diagnosis : [],
     subjectGapAnalysis: Array.isArray(report.subject_gap_analysis) ? report.subject_gap_analysis : [],
     strengthBreakthroughs: Array.isArray(report.strength_breakthroughs) ? report.strength_breakthroughs : [],
-    executionPlan: Array.isArray(report.execution_plan) ? report.execution_plan : [],
-    stageGoals: Array.isArray(report.stage_goals) ? report.stage_goals : [],
     riskAlerts: Array.isArray(report.risk_alerts) ? report.risk_alerts : [],
     followupMaterials: Array.isArray(report.followup_materials) ? report.followup_materials : [],
-    parentFocus: report.parent_focus || '',
     electiveNote: report.elective_note || ''
   }
 }
@@ -168,23 +179,22 @@ function buildReportExportText({ payload, report, trendSummary, enhancedReport }
         if (Array.isArray(item.source_basis) && item.source_basis.length) lines.push(`来源：${item.source_basis.join('；')}`)
         if (item.action) lines.push(`下一步：${item.action}`)
         if (item.next_target) lines.push(`下次目标：${item.next_target}`)
+        if (item.analysis_summary) lines.push(`分析小结：${item.analysis_summary}`)
+        if (Array.isArray(item.analysis_rows) && item.analysis_rows.length) {
+          lines.push('内容｜得分｜总分｜得分率')
+          item.analysis_rows.forEach((row) => {
+            lines.push(`${row.content || ''}｜${row.score != null ? row.score : '-'}｜${row.full_score != null ? row.full_score : '-'}｜${row.rate != null ? row.rate : '-'}%`)
+          })
+        }
+        if (Array.isArray(item.section_advice) && item.section_advice.length) lines.push(`章节独立建议：${item.section_advice.join('；')}`)
         return lines.join('；')
       })
-    : []
-  const enhancedCoreDiagnosis = Array.isArray(enhancedReport && enhancedReport.core_diagnosis)
-    ? enhancedReport.core_diagnosis
     : []
   const enhancedSubjectGapAnalysis = Array.isArray(enhancedReport && enhancedReport.subject_gap_analysis)
     ? enhancedReport.subject_gap_analysis
     : []
   const enhancedStrengthBreakthroughs = Array.isArray(enhancedReport && enhancedReport.strength_breakthroughs)
     ? enhancedReport.strength_breakthroughs
-    : []
-  const enhancedExecutionPlan = Array.isArray(enhancedReport && enhancedReport.execution_plan)
-    ? enhancedReport.execution_plan
-    : []
-  const enhancedStageGoals = Array.isArray(enhancedReport && enhancedReport.stage_goals)
-    ? enhancedReport.stage_goals
     : []
   const enhancedRiskAlerts = Array.isArray(enhancedReport && enhancedReport.risk_alerts)
     ? enhancedReport.risk_alerts
@@ -203,20 +213,11 @@ function buildReportExportText({ payload, report, trendSummary, enhancedReport }
         '各科深入分析',
         ...enhancedSubjectLines,
         '',
-        '核心诊断',
-        ...enhancedCoreDiagnosis,
-        '',
         '各科分差分析',
         ...enhancedSubjectGapAnalysis,
         '',
         '优势突破点',
         ...enhancedStrengthBreakthroughs,
-        '',
-        '执行计划',
-        ...enhancedExecutionPlan,
-        '',
-        '阶段目标',
-        ...enhancedStageGoals,
         '',
         '风险提醒',
         ...enhancedRiskAlerts,
@@ -224,7 +225,6 @@ function buildReportExportText({ payload, report, trendSummary, enhancedReport }
         '建议补充材料',
         ...enhancedFollowupMaterials,
         '',
-        enhancedReport.parent_focus ? `家长关注点：${enhancedReport.parent_focus}` : '',
         enhancedReport.elective_note ? `选科补充说明：${enhancedReport.elective_note}` : '',
         enhancedReport.disclaimer ? `说明：${enhancedReport.disclaimer}` : ''
       ]
@@ -354,7 +354,6 @@ Page({
     this._pageAlive = true
     const last = getLastReport()
     const report = last ? last.report : null
-    const enhanced = getEnhancedReport()
     const preferences = getPreferences()
     const historyRecords = getHistoryRecords()
     const city = (last && last.payload && last.payload.student && last.payload.student.city) || preferences.city || '杭州'
@@ -373,10 +372,10 @@ Page({
       subjectTrendRows: trendSummary.subjects || [],
       city,
       educationLink: EDUCATION_DEPT_LINKS[city] || '',
-      enhancedPurchased: Boolean(enhanced && last && enhanced.reportKey === this.getReportKey(last)),
+      enhancedPurchased: false,
       strongSubject: getReportSubjectName(report, 'best_subject', ''),
       weakSubject: getReportSubjectName(report, 'weakest_subject', ''),
-      enhancedReport: enhanced && last && enhanced.reportKey === this.getReportKey(last) ? enhanced.report : null,
+      enhancedReport: null,
       pendingMaterials: [],
       previewMaterialId: '',
       enhancedJobId: '',
@@ -387,7 +386,7 @@ Page({
       enhancedDebugHint: '',
       enhancedMaterialCount: 0,
       enhancedImageCount: 0,
-      enhancedDetail: buildEnhancedDetailSections(enhanced && last && enhanced.reportKey === this.getReportKey(last) ? enhanced.report : null)
+      enhancedDetail: buildEnhancedDetailSections(null)
     })
     if (historyRecords.length > 0 && this.data.trendExpanded) {
       wx.nextTick(() => this.renderTrendCharts())
@@ -587,7 +586,7 @@ Page({
   },
 
   onEnhancedSubjectInput(event) {
-    const subject = (event.detail.value || '').trim() || SUBJECTS[0]
+    const subject = normalizeSubjectName(event.detail.value || '') || SUBJECTS[0]
     this.setData({
       materialSubjectName: subject
     })
@@ -741,7 +740,7 @@ Page({
   },
 
   buildCurrentMaterialEntry() {
-    const subject = (this.data.materialSubjectName || '').trim()
+    const subject = normalizeSubjectName(this.data.materialSubjectName || '').trim()
     if (!subject) {
       return { error: '请先填写要分析的学科。' }
     }
@@ -794,12 +793,12 @@ Page({
   getMissingEnhancedSubjects(materials = []) {
     const subjectSet = new Set(
       (materials || [])
-        .map((item) => String(item && item.subject ? item.subject : '').trim())
+        .map((item) => normalizeSubjectName(item && item.subject ? item.subject : ''))
         .filter(Boolean)
     )
     const payloadSubjects = Array.isArray(this.data.payload && this.data.payload.subjects)
       ? this.data.payload.subjects
-          .map((item) => String(item && item.name ? item.name : '').trim())
+          .map((item) => normalizeSubjectName(item && item.name ? item.name : ''))
           .filter(Boolean)
       : []
     return payloadSubjects.filter((subject) => !subjectSet.has(subject))
@@ -1020,23 +1019,10 @@ Page({
       if (!this.data.enhancedReport && this.data.report) {
         const fallback = buildEnhancedDetailSections({
           subject_insights: [],
-          core_diagnosis: [
-            '当前任务未成功返回完整增强分析，但系统已根据现有成绩与补充材料整理了基础深度结论。',
-            '如果是图片上传较慢，通常是素材较大或网络较慢；如果是服务端错误，系统会继续沿用规则兜底内容。'
-          ],
           subject_gap_analysis: [],
           strength_breakthroughs: [
             '先稳住当前优势科目，保持原有训练节奏，避免优势回落。',
             '把最弱学科拆成题型级别来补，不再只看总分。'
-          ],
-          execution_plan: [
-            '优先复盘当前输入科目的题型与模块，先找失分最集中的部分。',
-            '接下来 7 天每天安排 20 到 30 分钟的定向训练，并记录错因。',
-            '补充一张更清晰的试卷或模块截图，AI 会更容易定位具体失分点。'
-          ],
-          stage_goals: [
-            '下一次考试先验证当前补救动作是否生效。',
-            '先让最弱科目的基础题稳定，再追求中档题提分。'
           ],
           risk_alerts: [
             '材料太少时，AI 只能给出方向性结论，不能替代试卷讲评。',
@@ -1046,7 +1032,6 @@ Page({
             '补充更清晰的试卷照片，尤其是题型标题和模块得分。',
             '如果是文字输入，尽量写出“题型-满分-得分-失分原因”。'
           ],
-          parent_focus: '家长可以先盯住一个最弱模块，帮助孩子把错因写清楚，而不是一次盯所有科目。',
           elective_note: this.data.report.elective_note || ''
         })
         this.setData({
@@ -1054,14 +1039,10 @@ Page({
             summary: 'AI增强分析已完成基础兜底，建议继续补充更清晰材料后再次生成。',
             overall_trend: '',
             subject_insights: [],
-            core_diagnosis: fallback.coreDiagnosis,
             subject_gap_analysis: fallback.subjectGapAnalysis,
             strength_breakthroughs: fallback.strengthBreakthroughs,
-            execution_plan: fallback.executionPlan,
-            stage_goals: fallback.stageGoals,
             risk_alerts: fallback.riskAlerts,
             followup_materials: fallback.followupMaterials,
-            parent_focus: fallback.parentFocus,
             elective_note: fallback.electiveNote,
             disclaimer: '增强分析基于当前成绩和已上传材料生成，不能替代试卷讲评、学校政策和教师判断。'
           },
