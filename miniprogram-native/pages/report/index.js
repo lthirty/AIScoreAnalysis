@@ -69,7 +69,7 @@ function formatElapsedText(ms) {
 function buildEnhancedDebugHint(status, elapsedMs, materialCount, uploadCount, error) {
   const elapsedText = formatDuration(elapsedMs)
   if (error) {
-    return `增强分析遇到异常，系统已自动回退到规则报告。返回后重新进入，通常可以很快继续执行。`
+    return `增强分析遇到异常，系统已自动回退到规则报告。`
   }
   if (status === 'pending') {
     return `任务已排队 ${elapsedText}。常见慢因：材料较多、图片上传尚未结束、云端 AI 正在排队。`
@@ -679,7 +679,7 @@ Page({
     const enhancedDebugHint = buildEnhancedDebugHint(status, elapsedMs, materialCount, uploadCount, error)
     this.setData({
       enhancedJobStatus: status || '',
-      enhancedJobError: error && status === 'failed' ? '增强分析已自动回退到规则报告。返回后重新进入，通常可以很快继续执行。' : '',
+      enhancedJobError: error && status === 'failed' ? '增强分析已自动回退到规则报告。' : '',
       enhancedJobElapsedMs: elapsedMs || 0,
       enhancedJobElapsedText: formatElapsedText(elapsedMs),
       enhancedMaterialCount: materialCount || 0,
@@ -1013,7 +1013,7 @@ Page({
       })
     } catch (error) {
       if (this._pageAlive !== false) {
-        this.setEnhancedProgress(3, '增强分析出现异常，系统已自动切换到规则报告。返回后重新进入，通常可以很快继续执行。已上传材料不会丢失。')
+        this.setEnhancedProgress(3, '增强分析出现异常，系统已自动切换到规则报告。已上传材料不会丢失。')
       }
       this.updateEnhancedDebugState('failed', this.data.enhancedJobElapsedMs || 0, pendingMaterials.length, pendingMaterials.filter((item) => item.mode === 'upload').length, error && error.message ? error.message : String(error))
       console.error(error)

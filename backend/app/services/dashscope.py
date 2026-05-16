@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import re
 from typing import Any
 
@@ -21,6 +22,7 @@ class AiResponseError(RuntimeError):
 
 RETRY_MAX_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 2
+logger = logging.getLogger(__name__)
 
 
 async def run_ocr_score(
@@ -69,6 +71,7 @@ async def run_ai_report(*, settings: Settings, score_input: ScoreInput) -> Score
         payload["mock_report"] = False
         return ScoreReport.model_validate(payload)
     except Exception:
+        logger.exception("AI report generation failed; falling back to rule report")
         return local_report
 
 
@@ -106,6 +109,7 @@ async def run_enhanced_report(
         payload["mock_report"] = False
         return EnhancedScoreReport.model_validate(payload)
     except Exception:
+        logger.exception("Enhanced report generation failed; falling back to rule report")
         return build_mock_enhanced_report(
             score_input,
             base_report=local_report,

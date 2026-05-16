@@ -3,11 +3,21 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '3.0.15';
+export const VERSION = '3.0.16';
 export const BUILD_DATE = '2026-05-16';
-export const BUILD_NUMBER = '20260516-13';
+export const BUILD_NUMBER = '20260516-14';
 
 export const CHANGELOG = [
+  {
+    version: '3.0.16',
+    date: '2026-05-16',
+    author: 'Codex',
+    changes: [
+      '增强分析异常继续自动回退到规则报告，但不再向客户提示需要返回重进',
+      '后端增强分析异常统一记录完整日志，方便后续把错误信息直接反馈给模型排查',
+      '微信小程序版本号升级到 v3.0.16 · 2026-05-16'
+    ]
+  },
   {
     version: '3.0.15',
     date: '2026-05-16',
