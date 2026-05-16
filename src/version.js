@@ -3,11 +3,21 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '3.0.16';
+export const VERSION = '3.0.17';
 export const BUILD_DATE = '2026-05-16';
-export const BUILD_NUMBER = '20260516-14';
+export const BUILD_NUMBER = '20260516-15';
 
 export const CHANGELOG = [
+  {
+    version: '3.0.17',
+    date: '2026-05-16',
+    author: 'Codex',
+    changes: [
+      '增强分析升级为服务端两段式自愈：先正常生成，失败后自动用修复提示再试一次，最后才回退规则报告',
+      '增强分析失败日志保留完整异常和截断后的原始输出，方便后续定位模型返回结构问题',
+      '微信小程序版本号升级到 v3.0.17 · 2026-05-16'
+    ]
+  },
   {
     version: '3.0.16',
     date: '2026-05-16',

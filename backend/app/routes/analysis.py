@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 from uuid import uuid4
 
@@ -20,6 +21,7 @@ from app.services.report_generator import build_mock_enhanced_report, build_mock
 from app.services.score_parser import parse_score_text
 
 router = APIRouter(prefix="/api", tags=["analysis"])
+logger = logging.getLogger(__name__)
 REPORT_JOBS: dict[str, dict] = {}
 ENHANCED_REPORT_JOBS: dict[str, dict] = {}
 RUNNING_TASKS: dict[str, asyncio.Task] = {}
@@ -157,6 +159,7 @@ async def run_report_job(job_id: str, payload: ScoreInput, settings) -> None:
         REPORT_JOBS[job_id]["result"] = await run_ai_report(settings=settings, score_input=payload)
         REPORT_JOBS[job_id]["status"] = "done"
     except Exception as error:
+        logger.exception("Report job failed; falling back to rule report (job_id=%s)", job_id)
         REPORT_JOBS[job_id]["error"] = str(error)
         REPORT_JOBS[job_id]["result"] = build_mock_report(payload)
         REPORT_JOBS[job_id]["status"] = "done"
@@ -174,6 +177,7 @@ async def run_enhanced_report_job(job_id: str, payload: EnhancedScoreRequest, se
         )
         ENHANCED_REPORT_JOBS[job_id]["status"] = "done"
     except Exception as error:
+        logger.exception("Enhanced report job failed; falling back to rule report (job_id=%s)", job_id)
         ENHANCED_REPORT_JOBS[job_id]["error"] = str(error)
         ENHANCED_REPORT_JOBS[job_id]["result"] = build_mock_enhanced_report(payload.score_input)
         ENHANCED_REPORT_JOBS[job_id]["status"] = "done"

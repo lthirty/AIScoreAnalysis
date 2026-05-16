@@ -20,6 +20,12 @@ class AiResponseError(RuntimeError):
     pass
 
 
+class EnhancedReportBuildError(RuntimeError):
+    def __init__(self, message: str, *, raw_content: str = "") -> None:
+        super().__init__(message)
+        self.raw_content = raw_content
+
+
 RETRY_MAX_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 2
 logger = logging.getLogger(__name__)
@@ -92,30 +98,115 @@ async def run_enhanced_report(
         )
 
     local_report = base_report or build_mock_report(score_input)
-    messages = _build_enhanced_report_messages(
-        score_input=score_input,
-        base_report=local_report,
-        history_records=history_records or [],
-        materials=materials or [],
-    )
     try:
-        data = await _chat_completion(
+        return await _build_enhanced_report_once(
             settings=settings,
-            model=settings.analyze_model,
-            messages=messages,
+            score_input=score_input,
+            base_report=local_report,
+            history_records=history_records or [],
+            materials=materials or [],
         )
-        content = _extract_message_content(data)
-        payload = extract_json_payload(content)
-        payload["mock_report"] = False
-        return EnhancedScoreReport.model_validate(payload)
+    except EnhancedReportBuildError as first_error:
+        logger.exception(
+            "Enhanced report primary generation failed; retrying with repair prompt (subjects=%d history=%d materials=%d)",
+            len(score_input.subjects),
+            len(history_records or []),
+            len(materials or []),
+        )
+        try:
+            return await _build_enhanced_report_repair(
+                settings=settings,
+                score_input=score_input,
+                base_report=local_report,
+                history_records=history_records or [],
+                materials=materials or [],
+                previous_error=first_error,
+            )
+        except Exception:
+            logger.exception(
+                "Enhanced report recovery failed; falling back to rule report (subjects=%d history=%d materials=%d)",
+                len(score_input.subjects),
+                len(history_records or []),
+                len(materials or []),
+            )
+            return build_mock_enhanced_report(
+                score_input,
+                base_report=local_report,
+                history_records=history_records or [],
+                materials=materials or [],
+            )
     except Exception:
-        logger.exception("Enhanced report generation failed; falling back to rule report")
+        logger.exception(
+            "Enhanced report generation failed before recovery; falling back to rule report (subjects=%d history=%d materials=%d)",
+            len(score_input.subjects),
+            len(history_records or []),
+            len(materials or []),
+        )
         return build_mock_enhanced_report(
             score_input,
             base_report=local_report,
             history_records=history_records or [],
             materials=materials or [],
         )
+
+
+async def _build_enhanced_report_once(
+    *,
+    settings: Settings,
+    score_input: ScoreInput,
+    base_report: ScoreReport,
+    history_records: list[HistoryExamRecord],
+    materials: list[EnhancedMaterial],
+) -> EnhancedScoreReport:
+    messages = _build_enhanced_report_messages(
+        score_input=score_input,
+        base_report=base_report,
+        history_records=history_records,
+        materials=materials,
+    )
+    return await _chat_and_validate_enhanced_report(settings=settings, messages=messages)
+
+
+async def _build_enhanced_report_repair(
+    *,
+    settings: Settings,
+    score_input: ScoreInput,
+    base_report: ScoreReport,
+    history_records: list[HistoryExamRecord],
+    materials: list[EnhancedMaterial],
+    previous_error: EnhancedReportBuildError,
+) -> EnhancedScoreReport:
+    messages = _build_enhanced_report_repair_messages(
+        score_input=score_input,
+        base_report=base_report,
+        history_records=history_records,
+        materials=materials,
+        previous_error=previous_error,
+    )
+    return await _chat_and_validate_enhanced_report(settings=settings, messages=messages)
+
+
+async def _chat_and_validate_enhanced_report(
+    *,
+    settings: Settings,
+    messages: list[dict[str, Any]],
+) -> EnhancedScoreReport:
+    data = await _chat_completion(
+        settings=settings,
+        model=settings.analyze_model,
+        messages=messages,
+    )
+    content = _extract_message_content(data)
+    payload = extract_json_payload(content)
+    payload["mock_report"] = False
+    try:
+        return EnhancedScoreReport.model_validate(payload)
+    except Exception as error:
+        truncated = _truncate_text(content, 4000)
+        raise EnhancedReportBuildError(
+            "Enhanced report validation failed",
+            raw_content=truncated,
+        ) from error
 
 
 async def _chat_completion(
@@ -318,6 +409,58 @@ JSON 格式必须完全符合：
                 "text": f"这是{material.subject}的补充图片材料，文件名：{material.image_name or '未命名'}。如未看到清晰题干或模块名，请明确说明证据不足。"
             })
     return [{"role": "user", "content": content}]
+
+
+def _build_enhanced_report_repair_messages(
+    *,
+    score_input: ScoreInput,
+    base_report: ScoreReport,
+    history_records: list[HistoryExamRecord],
+    materials: list[EnhancedMaterial],
+    previous_error: EnhancedReportBuildError,
+) -> list[dict[str, Any]]:
+    history_text = _format_history_for_prompt(history_records)
+    material_text = _format_materials_for_prompt(materials)
+    raw_content = _truncate_text(previous_error.raw_content or "", 3000)
+    content = f"""
+你是资深学科成绩分析老师。上一轮增强分析输出未通过校验，请直接修复后重新输出完整 JSON。
+
+失败原因：
+{previous_error}
+
+输入成绩 JSON：
+{json.dumps(score_input.model_dump(), ensure_ascii=False)}
+
+基础报告 JSON：
+{json.dumps(base_report.model_dump(), ensure_ascii=False)}
+
+历史趋势：
+{history_text}
+
+增强材料：
+{material_text}
+
+上一轮失败输出（如果有）：
+{raw_content or '无'}
+
+修复要求：
+1. 只输出 JSON，不要输出 Markdown 或解释文字。
+2. 必须完整包含 schema 中所有必填字段，不能遗漏 summary、overall_trend、subject_insights、risk_alerts、followup_materials、parent_focus、elective_note。
+3. 如果某些学科缺少数据，请直接使用“由于缺少数据，因此无法进行深入分析。”。
+4. 保持内容具体、可执行，不要输出空字符串或空数组作为主要结论。
+5. 如果上一轮输出缺少字段，请补齐；如果字段格式不对，请修正为 schema 要求的格式。
+
+JSON 格式必须完全符合：
+{json.dumps(EnhancedScoreReport.model_json_schema(), ensure_ascii=False)}
+""".strip()
+    return [{"role": "user", "content": [{"type": "text", "text": content}]}]
+
+
+def _truncate_text(text: str, limit: int) -> str:
+    cleaned = text or ""
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[:limit] + "\n...[truncated]"
 
 
 def _format_history_for_prompt(history_records: list[HistoryExamRecord]) -> str:
