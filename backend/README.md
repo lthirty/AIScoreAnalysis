@@ -67,8 +67,8 @@ Copy `.env.example` to `.env` for local use. Do not commit `.env`.
 ```text
 DASHSCOPE_API_KEY=your Aliyun Bailian API key
 DASHSCOPE_ENDPOINT=https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
-OCR_MODEL=qwen-vl-max-latest
-ANALYZE_MODEL=qwen-max-latest
+OCR_MODEL=qwen3.6-flash
+ANALYZE_MODEL=qwen3.6-flash
 DATABASE_URL=
 ```
 

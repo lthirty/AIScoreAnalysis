@@ -3,19 +3,20 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '4.0.0';
+export const VERSION = '4.1.1';
 export const BUILD_DATE = '2026-05-16';
-export const BUILD_NUMBER = '20260516-22';
+export const BUILD_NUMBER = '20260516-24';
 
 export const CHANGELOG = [
   {
-    version: '4.0.0',
+    version: '4.1.1',
     date: '2026-05-16',
     author: 'Codex',
     changes: [
-      '大版本升级：增强分析改为按输入分项与材料进行强制针对性分析，英语等学科可逐项输出得分率和对应建议',
-      '同日期成绩冲突、导出内容、版本展示和 CloudBase 包同步完成整理',
-      '微信小程序版本号升级到 v4.0.0 · 2026-05-16'
+      'AI分析改为结构化上下文 + JSON mode：后端先压缩成绩、历史和材料为摘要，再让模型只补简要结论，减少上下文和重试开销',
+      '默认分析/识别模型切换为更快的百炼模型，增强分析轮询间隔同步缩短，整体响应更轻',
+      '迁移小程序已保存的旧默认模型配置，避免仍沿用 qwen-max-latest / qwen-vl-max-latest',
+      '微信小程序版本号升级到 v4.1.1 · 2026-05-16'
     ]
   },
   {

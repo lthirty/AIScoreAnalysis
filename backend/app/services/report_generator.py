@@ -94,6 +94,143 @@ def build_mock_report(score_input: ScoreInput) -> ScoreReport:
     )
 
 
+def build_compact_report_context(score_input: ScoreInput, report: ScoreReport) -> dict[str, Any]:
+    performances = [_build_subject_performance(item) for item in score_input.subjects]
+    comparisons = report.subject_comparison or _build_subject_comparisons(score_input)
+    return {
+        "student": score_input.student.model_dump(),
+        "exam": score_input.exam.model_dump(),
+        "subjects": [
+            {
+                "name": item.name,
+                "score": round(item.score, 1),
+                "full_score": round(item.full_score, 1),
+                "rate": round(item.rate * 100, 1),
+                "level": item.level,
+            }
+            for item in performances
+        ],
+        "max_subjects": [
+            {
+                "name": item.name,
+                "score": round(item.score, 1),
+                "full_score": round(item.full_score, 1),
+            }
+            for item in score_input.max_subjects
+        ],
+        "overview": report.overview.model_dump(),
+        "summary": report.summary,
+        "subject_comparison": [
+            {
+                "name": item.name,
+                "score": round(item.score, 1),
+                "full_score": round(item.full_score, 1),
+                "rate": round(item.rate * 100, 1),
+                "reference_score": item.reference_score,
+                "gap_to_reference": item.gap_to_reference,
+            }
+            for item in comparisons
+        ],
+        "priority": [item.model_dump() for item in (report.priority or [])[:3]],
+        "strengths": [item.model_dump() for item in (report.strengths or [])[:3]],
+        "weaknesses": [item.model_dump() for item in (report.weaknesses or [])[:3]],
+        "learning_advice": list(report.learning_advice[:4]),
+        "next_goals": list(report.next_goals[:3]),
+        "elective_plan": report.elective_plan.model_dump(),
+        "elective_advice": report.elective_advice,
+    }
+
+
+def build_compact_enhanced_context(
+    score_input: ScoreInput,
+    base_report: ScoreReport,
+    history_records: list[HistoryExamRecord] | None = None,
+    materials: list[EnhancedMaterial] | None = None,
+) -> dict[str, Any]:
+    history_records = history_records or []
+    materials = materials or []
+    material_map = _build_material_map(materials)
+    trend_map = _build_history_trend_map(history_records)
+    base_context = build_compact_report_context(score_input, base_report)
+    subject_context = []
+    for item in score_input.subjects:
+        performance = _build_subject_performance(item)
+        material = _get_material_for_subject(material_map, item.name)
+        modules = _extract_module_scores(_combine_material_detail(material))
+        trend = trend_map.get(item.name)
+        subject_context.append(
+            {
+                "name": item.name,
+                "score": round(item.score, 1),
+                "full_score": round(item.full_score, 1),
+                "rate": round(performance.rate * 100, 1),
+                "trend": _format_trend_text(trend),
+                "material_type": material.input_type if material else "",
+                "material_hint": _combine_material_detail(material)[:160],
+                "modules": [
+                    {
+                        "name": module["name"],
+                        "score": module["score"],
+                        "full_score": module["full_score"],
+                        "rate": module["rate"],
+                    }
+                    for module in modules[:8]
+                ],
+            }
+        )
+    return {
+        "base_report": base_context,
+        "subject_overview": subject_context,
+        "history_summary": _summarize_history_records(history_records),
+        "materials_summary": _summarize_materials(materials),
+    }
+
+
+def _summarize_history_records(history_records: list[HistoryExamRecord]) -> list[dict[str, Any]]:
+    summary = []
+    for record in history_records[-3:]:
+        summary.append(
+            {
+                "exam_name": record.exam_name,
+                "exam_date": record.exam_date,
+                "total_score": round(record.total_score, 1),
+                "subjects": [
+                    {
+                        "name": item.name,
+                        "score": round(item.score, 1),
+                        "full_score": round(item.full_score, 1),
+                    }
+                    for item in record.subjects
+                ],
+            }
+        )
+    return summary
+
+
+def _summarize_materials(materials: list[EnhancedMaterial]) -> list[dict[str, Any]]:
+    summary = []
+    for material in materials:
+        modules = _extract_module_scores(_combine_material_detail(material))
+        summary.append(
+            {
+                "subject": material.subject,
+                "input_type": material.input_type,
+                "has_image": bool((material.image_url or "").strip() or (material.image_name or "").strip()),
+                "detail_hint": (material.detail or "")[:160],
+                "modules": [
+                    {
+                        "name": module["name"],
+                        "score": module["score"],
+                        "full_score": module["full_score"],
+                        "rate": module["rate"],
+                    }
+                    for module in modules[:8]
+                ],
+            }
+        )
+    return summary
+
+
 def _format_extracted_modules(detail: str) -> str:
     modules = _extract_module_scores(detail)
     if not modules:

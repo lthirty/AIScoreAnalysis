@@ -9,7 +9,13 @@ import httpx
 from app.config import Settings
 from app.schemas import EnhancedMaterial, EnhancedScoreReport, HistoryExamRecord, ScoreInput, ScoreReport
 from app.services.json_utils import extract_json_payload
-from app.services.report_generator import build_mock_enhanced_report, build_mock_report, ensure_all_subject_insights
+from app.services.report_generator import (
+    build_compact_enhanced_context,
+    build_compact_report_context,
+    build_mock_enhanced_report,
+    build_mock_report,
+    ensure_all_subject_insights,
+)
 
 
 class AiConfigurationError(RuntimeError):
@@ -43,6 +49,7 @@ async def run_ocr_score(
     data = await _chat_completion(
         settings=settings,
         model=settings.ocr_model,
+        response_format={"type": "json_object"},
         messages=[
             {
                 "role": "user",
@@ -70,6 +77,7 @@ async def run_ai_report(*, settings: Settings, score_input: ScoreInput) -> Score
         data = await _chat_completion(
             settings=settings,
             model=settings.analyze_model,
+            response_format={"type": "json_object"},
             messages=[{"role": "user", "content": prompt}],
         )
         content = _extract_message_content(data)
@@ -208,6 +216,7 @@ async def _chat_and_validate_enhanced_report(
     data = await _chat_completion(
         settings=settings,
         model=settings.analyze_model,
+        response_format={"type": "json_object"},
         messages=messages,
     )
     content = _extract_message_content(data)
@@ -228,18 +237,22 @@ async def _chat_completion(
     settings: Settings,
     model: str,
     messages: list[dict[str, Any]],
+    response_format: dict[str, Any] | None = None,
     attempt: int = 1,
 ) -> dict[str, Any]:
     _ensure_api_key(settings)
     try:
         async with httpx.AsyncClient(timeout=90) as client:
+            payload = {"model": model, "messages": messages, "temperature": 0.1}
+            if response_format:
+                payload["response_format"] = response_format
             response = await client.post(
                 settings.dashscope_endpoint,
                 headers={
                     "Authorization": f"Bearer {settings.dashscope_api_key}",
                     "Content-Type": "application/json",
                 },
-                json={"model": model, "messages": messages, "temperature": 0.2},
+                json=payload,
             )
 
         if response.status_code >= 500:
@@ -253,14 +266,26 @@ async def _chat_completion(
         delay = RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
         import asyncio
         await asyncio.sleep(delay)
-        return await _chat_completion(settings=settings, model=model, messages=messages, attempt=attempt + 1)
+        return await _chat_completion(
+            settings=settings,
+            model=model,
+            messages=messages,
+            response_format=response_format,
+            attempt=attempt + 1,
+        )
     except AiResponseError:
         if attempt >= RETRY_MAX_ATTEMPTS:
             raise
         delay = RETRY_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
         import asyncio
         await asyncio.sleep(delay)
-        return await _chat_completion(settings=settings, model=model, messages=messages, attempt=attempt + 1)
+        return await _chat_completion(
+            settings=settings,
+            model=model,
+            messages=messages,
+            response_format=response_format,
+            attempt=attempt + 1,
+        )
 
 
 def _ensure_api_key(settings: Settings) -> None:
@@ -345,15 +370,13 @@ JSON 格式：
 
 
 def _build_report_prompt(score_input: ScoreInput, local_report: ScoreReport) -> str:
+    compact_context = build_compact_report_context(score_input, local_report)
     return f"""
 你是资深的中高考成绩分析老师，擅长学情诊断、分差对比、选科建议和家庭执行计划。
-请基于结构化成绩 JSON 生成接近 Web 端“AI 基础分析”的完整报告，内容要比普通摘要更具体。
+请基于下面的结构化上下文生成接近 Web 端“AI 基础分析”的完整报告，内容要比普通摘要更具体。
 
-输入成绩 JSON：
-{json.dumps(score_input.model_dump(), ensure_ascii=False)}
-
-本地规则分析参考：
-{json.dumps(local_report.model_dump(), ensure_ascii=False)}
+结构化上下文：
+{json.dumps(compact_context, ensure_ascii=False)}
 
 输出要求：
 1. 只输出 JSON，不要输出 Markdown。
@@ -366,6 +389,7 @@ def _build_report_prompt(score_input: ScoreInput, local_report: ScoreReport) -> 
 8. elective_plan 必须直接给出 recommendation、basis、alternatives、actions 和 note；参考本地规则的方向，不能只写“需要结合政策再看”。
 9. elective_advice 用一句完整文本同步概括 elective_plan：明确推荐组合、推荐依据、其他备选组合及依据。
 10. parent_advice 面向家长，避免空话，强调如何陪孩子复盘和跟进。
+11. subject_insights 不需要出现在基础报告里。
 
 JSON 格式必须完全符合：
 {json.dumps(ScoreReport.model_json_schema(), ensure_ascii=False)}
@@ -379,25 +403,15 @@ def _build_enhanced_report_messages(
     history_records: list[HistoryExamRecord],
     materials: list[EnhancedMaterial],
 ) -> list[dict[str, Any]]:
-    history_text = _format_history_for_prompt(history_records)
-    material_text = _format_materials_for_prompt(materials)
+    compact_context = build_compact_enhanced_context(score_input, base_report, history_records, materials)
     content: list[dict[str, Any]] = [
         {
             "type": "text",
             "text": f"""
 你是资深学科成绩分析老师。请基于结构化成绩、基础报告、历史趋势，以及用户补充的题型材料或试卷照片，生成 AI 增强分析。
 
-输入成绩 JSON：
-{json.dumps(score_input.model_dump(), ensure_ascii=False)}
-
-基础报告 JSON：
-{json.dumps(base_report.model_dump(), ensure_ascii=False)}
-
-历史趋势：
-{history_text}
-
-增强材料：
-{material_text}
+结构化上下文：
+{json.dumps(compact_context, ensure_ascii=False)}
 
 输出要求：
 1. 只输出 JSON，不要输出 Markdown。
@@ -407,11 +421,10 @@ def _build_enhanced_report_messages(
 5. 每个学科判断尽量说明依据来自哪类材料：本次成绩、历史趋势、文字录入、图片可见内容。
 6. 如果增强材料已经提供了可计算的模块得分率或失分分值，请直接指出“失分最集中模块”“相对稳定模块”“优先训练顺序”，不要只停留在笼统表述。
 7. 对于已经输入了分项材料的学科，必须基于这些材料给出分项层面的针对性分析与建议，不能只输出学科总论。
-8. 对于所有已输入成绩的学科，subject_insights 必须逐科覆盖，不能只写个别学科。
+8. 对于所有已输入成绩的学科，subject_insights 最好逐科覆盖；如果担心输出过长，可以先输出简短版本，后端会补齐。
 9. action 必须写成可执行动作，至少包含训练方式、频率或时长；next_target 必须给出下一次考试可验证的小目标。
-10. 每个学科都要补充 analysis_rows，逐行列出内容、得分、总分、得分率；analysis_summary 用一句话总结该科的当前判断。
-11. 增强分析应比基础分析更具体，尤其要回答：当前趋势、失分模块、下一步补什么材料、下次目标怎么定；不要再输出独立的“阶段目标”或“家长关注点”模块。
-12. elective_note 不做绝对选科承诺。
+10. 增强分析应比基础分析更具体，尤其要回答：当前趋势、失分模块、下一步补什么材料、下次目标怎么定；不要再输出独立的“阶段目标”或“家长关注点”模块。
+11. elective_note 不做绝对选科承诺。
 
 JSON 格式必须完全符合：
 {json.dumps(EnhancedScoreReport.model_json_schema(), ensure_ascii=False)}
@@ -436,8 +449,7 @@ def _build_enhanced_report_repair_messages(
     materials: list[EnhancedMaterial],
     previous_error: EnhancedReportBuildError,
 ) -> list[dict[str, Any]]:
-    history_text = _format_history_for_prompt(history_records)
-    material_text = _format_materials_for_prompt(materials)
+    compact_context = build_compact_enhanced_context(score_input, base_report, history_records, materials)
     raw_content = _truncate_text(previous_error.raw_content or "", 3000)
     content = f"""
 你是资深学科成绩分析老师。上一轮增强分析输出未通过校验，请直接修复后重新输出完整 JSON。
@@ -445,27 +457,18 @@ def _build_enhanced_report_repair_messages(
 失败原因：
 {previous_error}
 
-输入成绩 JSON：
-{json.dumps(score_input.model_dump(), ensure_ascii=False)}
-
-基础报告 JSON：
-{json.dumps(base_report.model_dump(), ensure_ascii=False)}
-
-历史趋势：
-{history_text}
-
-增强材料：
-{material_text}
+结构化上下文：
+{json.dumps(compact_context, ensure_ascii=False)}
 
 上一轮失败输出（如果有）：
 {raw_content or '无'}
 
 修复要求：
 1. 只输出 JSON，不要输出 Markdown 或解释文字。
-2. 必须完整包含 schema 中所有必填字段，不能遗漏 summary、overall_trend、subject_insights、risk_alerts、followup_materials、parent_focus、elective_note。
-3. 如果某些学科缺少数据，请直接使用“由于缺少数据，该科目无法进行深入分析。”。
-4. 保持内容具体、可执行，不要输出空字符串或空数组作为主要结论。
-5. 如果上一轮输出缺少字段，请补齐；如果字段格式不对，请修正为 schema 要求的格式。
+2. 只需优先修复 summary、overall_trend、subject_gap_analysis、strength_breakthroughs、risk_alerts、followup_materials、elective_note。
+3. subject_insights 可保持简短，由后端补齐具体分项分析。
+4. 如果某些学科缺少数据，请直接使用“由于缺少数据，该科目无法进行深入分析。”。
+5. 保持内容具体、可执行，不要输出空字符串或空数组作为主要结论。
 
 JSON 格式必须完全符合：
 {json.dumps(EnhancedScoreReport.model_json_schema(), ensure_ascii=False)}

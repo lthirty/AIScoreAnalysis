@@ -9,8 +9,8 @@ const DEFAULT_AI_CONFIG = {
   mode: 'platform',
   endpoint: '',
   apiKey: '',
-  analyzeModel: 'qwen-max-latest',
-  ocrModel: 'qwen-vl-max-latest'
+  analyzeModel: 'qwen3.6-flash',
+  ocrModel: 'qwen3.6-flash'
 }
 
 const AI_MODE_OPTIONS = [
@@ -19,20 +19,29 @@ const AI_MODE_OPTIONS = [
 ]
 
 const ANALYZE_MODEL_OPTIONS = [
-  'qwen-max-latest',
-  'qwen-plus-latest'
+  'qwen3.6-flash',
+  'qwen3.6-plus',
+  'qwen-max-latest'
 ]
 
 const OCR_MODEL_OPTIONS = [
-  'qwen-vl-max-latest',
-  'qwen-vl-plus-latest'
+  'qwen3.6-flash',
+  'qwen3.6-plus',
+  'qwen-vl-max-latest'
 ]
 
 function normalizeAiConfig(input = {}) {
-  return {
+  const next = {
     ...DEFAULT_AI_CONFIG,
     ...input
   }
+  if ((next.mode === 'platform' || !next.mode) && next.analyzeModel === 'qwen-max-latest') {
+    next.analyzeModel = DEFAULT_AI_CONFIG.analyzeModel
+  }
+  if ((next.mode === 'platform' || !next.mode) && next.ocrModel === 'qwen-vl-max-latest') {
+    next.ocrModel = DEFAULT_AI_CONFIG.ocrModel
+  }
+  return next
 }
 
 Page({

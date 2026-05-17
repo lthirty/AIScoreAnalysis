@@ -7,7 +7,7 @@ const { buildTrendSummary } = require('../../utils/trend')
 const { drawLineChart } = require('../../utils/trendCanvas')
 const { VERSION_LABEL } = require('../../utils/version')
 
-const ENHANCED_POLL_INTERVAL_MS = 2500
+const ENHANCED_POLL_INTERVAL_MS = 1200
 const ENHANCED_MAX_WAIT_MS = 900000
 
 function createEmptyMaterial() {

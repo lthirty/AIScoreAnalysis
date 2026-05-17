@@ -12,8 +12,8 @@ class Settings(BaseModel):
     port: int = 8080
     dashscope_api_key: str | None = None
     dashscope_endpoint: str = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-    ocr_model: str = "qwen-vl-max-latest"
-    analyze_model: str = "qwen-max-latest"
+    ocr_model: str = "qwen3.6-flash"
+    analyze_model: str = "qwen3.6-flash"
     database_url: str | None = None
     wx_app_id: str | None = None
     wx_app_secret: str | None = None
@@ -59,8 +59,8 @@ def get_settings() -> Settings:
             "DASHSCOPE_ENDPOINT",
             "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
         ),
-        ocr_model=getenv("OCR_MODEL", "qwen-vl-max-latest"),
-        analyze_model=getenv("ANALYZE_MODEL", "qwen-max-latest"),
+        ocr_model=getenv("OCR_MODEL", "qwen3.6-flash"),
+        analyze_model=getenv("ANALYZE_MODEL", "qwen3.6-flash"),
         database_url=getenv("DATABASE_URL"),
         wx_app_id=getenv("WX_APP_ID"),
         wx_app_secret=getenv("WX_APP_SECRET"),

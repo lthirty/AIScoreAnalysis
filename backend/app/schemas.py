@@ -151,13 +151,13 @@ class HistoryExamRecord(BaseModel):
 class EnhancedScoreReport(BaseModel):
     summary: str
     overall_trend: str
-    subject_insights: list[EnhancedSubjectInsight]
+    subject_insights: list[EnhancedSubjectInsight] = Field(default_factory=list)
     subject_gap_analysis: list[str] = Field(default_factory=list)
     strength_breakthroughs: list[str] = Field(default_factory=list)
-    risk_alerts: list[str]
-    followup_materials: list[str]
-    parent_focus: str
-    elective_note: str
+    risk_alerts: list[str] = Field(default_factory=list)
+    followup_materials: list[str] = Field(default_factory=list)
+    parent_focus: str = ""
+    elective_note: str = ""
     disclaimer: str = "增强分析基于当前成绩和已上传材料生成，不能替代试卷讲评、学校政策和教师判断。"
     mock_report: bool = True
 
