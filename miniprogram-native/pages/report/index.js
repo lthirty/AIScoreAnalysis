@@ -172,21 +172,23 @@ function buildReportExportText({ payload, report, trendSummary, enhancedReport }
         const lines = []
         lines.push(`${item.name || '未命名学科'}：${item.diagnosis || ''}`.trim())
         if (item.trend_judgment) lines.push(`趋势：${item.trend_judgment}`)
-        if (item.evidence) lines.push(`依据：${item.evidence}`)
-        if (item.score_gap_analysis) lines.push(`分差：${item.score_gap_analysis}`)
+        if (item.analysis_summary) lines.push(`分析小结：${item.analysis_summary}`)
         if (Array.isArray(item.loss_focus) && item.loss_focus.length) lines.push(`失分重点：${item.loss_focus.join('；')}`)
         if (Array.isArray(item.stable_focus) && item.stable_focus.length) lines.push(`稳定部分：${item.stable_focus.join('；')}`)
         if (Array.isArray(item.source_basis) && item.source_basis.length) lines.push(`来源：${item.source_basis.join('；')}`)
-        if (item.action) lines.push(`下一步：${item.action}`)
-        if (item.next_target) lines.push(`下次目标：${item.next_target}`)
-        if (item.analysis_summary) lines.push(`分析小结：${item.analysis_summary}`)
         if (Array.isArray(item.analysis_rows) && item.analysis_rows.length) {
           lines.push('内容｜得分｜总分｜得分率')
           item.analysis_rows.forEach((row) => {
             lines.push(`${row.content || ''}｜${row.score != null ? row.score : '-'}｜${row.full_score != null ? row.full_score : '-'}｜${row.rate != null ? row.rate : '-'}%`)
           })
         }
-        if (Array.isArray(item.section_advice) && item.section_advice.length) lines.push(`章节独立建议：${item.section_advice.join('；')}`)
+        if (item.action || (Array.isArray(item.section_advice) && item.section_advice.length) || item.next_target) {
+          const adviceLines = []
+          if (item.action) adviceLines.push(`下一步：${item.action}`)
+          if (Array.isArray(item.section_advice) && item.section_advice.length) adviceLines.push(`章节独立建议：${item.section_advice.join('；')}`)
+          if (item.next_target) adviceLines.push(`下次目标：${item.next_target}`)
+          lines.push(adviceLines.join('；'))
+        }
         return lines.join('；')
       })
     : []

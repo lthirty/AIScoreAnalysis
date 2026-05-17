@@ -678,6 +678,21 @@
   margin-top: 6rpx;
 }
 
+.section-advice-lead,
+.section-advice-footer {
+  color: #334155;
+  font-size: 24rpx;
+  line-height: 1.7;
+}
+
+.section-advice-lead {
+  margin-bottom: 8rpx;
+}
+
+.section-advice-footer {
+  margin-top: 10rpx;
+}
+
 .elective-option {
   background: #ffffff;
   border: 1rpx solid #e5eef7;

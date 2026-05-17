@@ -3,20 +3,19 @@
  * 版本信息与修改记录
  */
 
-export const VERSION = '4.1.1';
+export const VERSION = '4.1.2';
 export const BUILD_DATE = '2026-05-16';
-export const BUILD_NUMBER = '20260516-24';
+export const BUILD_NUMBER = '20260516-25';
 
 export const CHANGELOG = [
   {
-    version: '4.1.1',
+    version: '4.1.2',
     date: '2026-05-16',
     author: 'Codex',
     changes: [
-      'AI分析改为结构化上下文 + JSON mode：后端先压缩成绩、历史和材料为摘要，再让模型只补简要结论，减少上下文和重试开销',
-      '默认分析/识别模型切换为更快的百炼模型，增强分析轮询间隔同步缩短，整体响应更轻',
-      '迁移小程序已保存的旧默认模型配置，避免仍沿用 qwen-max-latest / qwen-vl-max-latest',
-      '微信小程序版本号升级到 v4.1.1 · 2026-05-16'
+      'AI深入分析子模块排版调整：删除顶部重复诊断内容，将“下一步”并入章节独立建议，将“下次目标”放在建议后面',
+      '保留得分率表格设计不变，仅优化子模块前后文结构与阅读顺序',
+      '微信小程序版本号升级到 v4.1.2 · 2026-05-16'
     ]
   },
   {

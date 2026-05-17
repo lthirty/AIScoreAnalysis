@@ -282,10 +282,6 @@
             <view class="score-main">{{insight.name}}</view>
             <view class="tag tag-blue">{{insight.trend_judgment}}</view>
           </view>
-          <view class="score-sub">{{insight.diagnosis}}</view>
-          <view class="score-sub">依据：{{insight.evidence}}</view>
-          <view class="score-sub">下一步：{{insight.action}}</view>
-          <view class="score-sub">下次目标：{{insight.next_target}}</view>
           <view wx:if="{{insight.analysis_summary}}" class="analysis-summary">{{insight.analysis_summary}}</view>
           <view wx:if="{{insight.analysis_rows && insight.analysis_rows.length}}" class="analysis-table">
             <view class="analysis-table-head">
@@ -303,7 +299,9 @@
           </view>
           <view wx:if="{{insight.section_advice && insight.section_advice.length}}" class="section-advice-list">
             <view class="section-advice-title">章节独立建议</view>
+            <view wx:if="{{insight.action}}" class="section-advice-lead">下一步：{{insight.action}}</view>
             <view wx:for="{{insight.section_advice}}" wx:key="index" class="section-advice-item">{{item}}</view>
+            <view wx:if="{{insight.next_target}}" class="section-advice-footer">下次目标：{{insight.next_target}}</view>
           </view>
         </view>
       </view>
