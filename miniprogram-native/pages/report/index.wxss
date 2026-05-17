@@ -195,10 +195,25 @@
   padding: 18rpx 20rpx;
 }
 
+.debug-card-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
 .debug-card-title {
   color: #1f2937;
   font-size: 26rpx;
   font-weight: 800;
+}
+
+.debug-card-arrow {
+  color: #94a3b8;
+  font-size: 24rpx;
+}
+
+.debug-card-body {
+  margin-top: 10rpx;
 }
 
 .debug-card-text {
@@ -672,25 +687,56 @@
 }
 
 .section-advice-item {
+  align-items: flex-start;
+  display: flex;
+  gap: 8rpx;
   color: #475569;
   font-size: 24rpx;
   line-height: 1.65;
   margin-top: 6rpx;
 }
 
-.section-advice-lead,
+.section-advice-item-bullet {
+  color: #4f46e5;
+  flex: 0 0 auto;
+  font-size: 24rpx;
+  line-height: 1.65;
+}
+
+.section-advice-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .section-advice-footer {
   color: #334155;
   font-size: 24rpx;
   line-height: 1.7;
+  margin-top: 8rpx;
 }
 
-.section-advice-lead {
+.section-advice-target {
+  margin-top: 10rpx;
+}
+
+.subject-trend-block {
+  background: #f8fbff;
+  border: 1rpx solid #e5eef7;
+  border-radius: 12rpx;
+  margin-top: 12rpx;
+  padding: 14rpx 16rpx 10rpx;
+}
+
+.subject-trend-title {
+  color: #1f2937;
+  font-size: 26rpx;
+  font-weight: 700;
   margin-bottom: 8rpx;
 }
 
-.section-advice-footer {
-  margin-top: 10rpx;
+.enhanced-subject-trend-canvas {
+  height: 220rpx;
+  width: 100%;
 }
 
 .elective-option {

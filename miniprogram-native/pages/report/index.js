@@ -65,6 +65,35 @@ function buildBriefAnalysisDisplay(report) {
   }
 }
 
+function buildAiModelDisplay(aiConfig = {}) {
+  const mode = aiConfig.mode === 'custom' ? '自定义 API' : '系统默认'
+  const analyzeModel = aiConfig.analyzeModel || 'qwen3.6-flash'
+  const ocrModel = aiConfig.ocrModel || 'qwen3.6-flash'
+  return {
+    mode,
+    analyzeModel,
+    ocrModel,
+    usageText: `${mode} · 分析 ${analyzeModel} / OCR ${ocrModel}`
+  }
+}
+
+function simplifyTrendDirection(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  if (text.includes('上升') || text.includes('+')) return '上升'
+  if (text.includes('下降') || text.includes('-')) return '下降'
+  if (text.includes('稳定') || text.includes('持平')) return '持平'
+  return ''
+}
+
+function formatSectionAdviceLine(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s*;\s*/g, '，')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/,(\S)/g, '，$1')
+}
+
 function buildMissingSubjectNotice(missingSubjects) {
   const subjects = (missingSubjects || []).map((item) => String(item || '').trim()).filter(Boolean)
   if (!subjects.length) return ''
@@ -102,7 +131,7 @@ function buildEnhancedDebugHint(status, elapsedMs, materialCount, uploadCount, e
   return `本次增强分析共耗时 ${elapsedText}，材料数 ${materialCount} 份，其中图片 ${uploadCount} 份。`
 }
 
-function buildEnhancedDetailSections(report) {
+function buildEnhancedDetailSections(report, trendRows = []) {
   if (!report) return {
     subjectInsights: [],
     subjectGapAnalysis: [],
@@ -112,8 +141,39 @@ function buildEnhancedDetailSections(report) {
     electiveNote: ''
   }
 
+  const subjectTrendMap = new Map(
+    (trendRows || []).map((item) => [String(item.subject || '').trim(), item])
+  )
+
+  const subjectInsights = (Array.isArray(report.subject_insights) ? report.subject_insights : []).map((item) => {
+    const trendRow = subjectTrendMap.get(String(item.name || '').trim()) || null
+    const trendDirection = simplifyTrendDirection(trendRow && trendRow.direction)
+    const totalRowName = `${item.name || ''}总分`
+    return {
+      ...item,
+      trend_points: Array.isArray(trendRow && trendRow.points) ? trendRow.points : [],
+      trend_current: trendRow && trendRow.current != null ? trendRow.current : null,
+      trend_direction: trendRow && trendRow.direction ? trendRow.direction : '',
+      trend_direction_label: trendDirection,
+      analysis_rows: Array.isArray(item.analysis_rows)
+        ? item.analysis_rows.map((row) => ({
+            ...row,
+            trend: String(row.content || '').trim() === totalRowName ? trendDirection : '',
+            trend_class:
+              String(row.content || '').trim() === totalRowName
+                ? trendDirection === '上升'
+                  ? 'text-good'
+                  : trendDirection === '下降'
+                    ? 'text-warn'
+                    : 'text-gray-400'
+                : 'text-gray-400'
+          }))
+        : []
+    }
+  })
+
   return {
-    subjectInsights: Array.isArray(report.subject_insights) ? report.subject_insights : [],
+    subjectInsights,
     subjectGapAnalysis: Array.isArray(report.subject_gap_analysis) ? report.subject_gap_analysis : [],
     strengthBreakthroughs: Array.isArray(report.strength_breakthroughs) ? report.strength_breakthroughs : [],
     riskAlerts: Array.isArray(report.risk_alerts) ? report.risk_alerts : [],
@@ -170,6 +230,7 @@ function buildReportExportText({ payload, report, trendSummary, enhancedReport }
   const enhancedSubjectLines = Array.isArray(enhancedReport && enhancedReport.subject_insights)
     ? enhancedReport.subject_insights.map((item) => {
         const lines = []
+        const trendLabel = simplifyTrendDirection(item.trend_direction)
         lines.push(`${item.name || '未命名学科'}：${item.diagnosis || ''}`.trim())
         if (item.trend_judgment) lines.push(`趋势：${item.trend_judgment}`)
         if (item.analysis_summary) lines.push(`分析小结：${item.analysis_summary}`)
@@ -177,15 +238,24 @@ function buildReportExportText({ payload, report, trendSummary, enhancedReport }
         if (Array.isArray(item.stable_focus) && item.stable_focus.length) lines.push(`稳定部分：${item.stable_focus.join('；')}`)
         if (Array.isArray(item.source_basis) && item.source_basis.length) lines.push(`来源：${item.source_basis.join('；')}`)
         if (Array.isArray(item.analysis_rows) && item.analysis_rows.length) {
-          lines.push('内容｜得分｜总分｜得分率')
+          lines.push('内容｜得分｜总分｜得分率｜变化趋势')
           item.analysis_rows.forEach((row) => {
-            lines.push(`${row.content || ''}｜${row.score != null ? row.score : '-'}｜${row.full_score != null ? row.full_score : '-'}｜${row.rate != null ? row.rate : '-'}%`)
+            const rowTrend = String(row.content || '').trim() === `${item.name || ''}总分` ? trendLabel : ''
+            lines.push(`${row.content || ''}｜${row.score != null ? row.score : '-'}｜${row.full_score != null ? row.full_score : '-'}｜${row.rate != null ? row.rate : '-'}%｜${rowTrend || '-'}`)
           })
         }
-        if (item.action || (Array.isArray(item.section_advice) && item.section_advice.length) || item.next_target) {
+        if (Array.isArray(item.section_advice) && item.section_advice.length) {
+          const adviceLines = []
+          adviceLines.push('章节独立建议：')
+          item.section_advice.forEach((advice) => {
+            adviceLines.push(`- ${formatSectionAdviceLine(advice)}`)
+          })
+          if (item.action) adviceLines.push(`下一步：${item.action}`)
+          if (item.next_target) adviceLines.push(`下次目标：${item.next_target}`)
+          lines.push(adviceLines.join('；'))
+        } else if (item.action || item.next_target) {
           const adviceLines = []
           if (item.action) adviceLines.push(`下一步：${item.action}`)
-          if (Array.isArray(item.section_advice) && item.section_advice.length) adviceLines.push(`章节独立建议：${item.section_advice.join('；')}`)
           if (item.next_target) adviceLines.push(`下次目标：${item.next_target}`)
           lines.push(adviceLines.join('；'))
         }
@@ -329,9 +399,12 @@ Page({
     enhancedJobElapsedMs: 0,
     enhancedJobElapsedText: '0 秒',
     enhancedDebugHint: '',
+    enhancedDebugExpanded: false,
     enhancedMaterialCount: 0,
     enhancedImageCount: 0,
-    enhancedDetail: buildEnhancedDetailSections(null),
+    enhancedModelUsage: '',
+    enhancedModelName: '',
+    enhancedDetail: buildEnhancedDetailSections(null, []),
     enhancedPurchased: false,
     strongSubject: '',
     weakSubject: '',
@@ -357,6 +430,8 @@ Page({
     const last = getLastReport()
     const report = last ? last.report : null
     const preferences = getPreferences()
+    const aiConfig = preferences.aiConfig || {}
+    const modelDisplay = buildAiModelDisplay(aiConfig)
     const historyRecords = getHistoryRecords()
     const city = (last && last.payload && last.payload.student && last.payload.student.city) || preferences.city || '杭州'
     const exam = last && last.payload ? last.payload.exam || {} : {}
@@ -378,6 +453,7 @@ Page({
       strongSubject: getReportSubjectName(report, 'best_subject', ''),
       weakSubject: getReportSubjectName(report, 'weakest_subject', ''),
       enhancedReport: null,
+      enhancedExplainExpanded: false,
       pendingMaterials: [],
       previewMaterialId: '',
       enhancedJobId: '',
@@ -386,9 +462,12 @@ Page({
       enhancedJobElapsedMs: 0,
       enhancedJobElapsedText: '0 秒',
       enhancedDebugHint: '',
+      enhancedDebugExpanded: false,
       enhancedMaterialCount: 0,
       enhancedImageCount: 0,
-      enhancedDetail: buildEnhancedDetailSections(null)
+      enhancedModelUsage: modelDisplay.usageText,
+      enhancedModelName: modelDisplay.analyzeModel,
+      enhancedDetail: buildEnhancedDetailSections(null, trendSummary.subjects || [])
     })
     if (historyRecords.length > 0 && this.data.trendExpanded) {
       wx.nextTick(() => this.renderTrendCharts())
@@ -576,6 +655,12 @@ Page({
     })
   },
 
+  toggleEnhancedDebugSection() {
+    this.setData({
+      enhancedDebugExpanded: !this.data.enhancedDebugExpanded
+    })
+  },
+
   switchMaterialMode(event) {
     const mode = event.currentTarget.dataset.mode
     this.setData({ materialMode: mode })
@@ -685,7 +770,31 @@ Page({
       enhancedJobElapsedText: formatElapsedText(elapsedMs),
       enhancedMaterialCount: materialCount || 0,
       enhancedImageCount: uploadCount || 0,
-      enhancedDebugHint
+      enhancedDebugHint,
+      enhancedModelUsage: this.data.enhancedModelUsage || '',
+      enhancedModelName: this.data.enhancedModelName || ''
+    })
+  },
+
+  renderEnhancedSubjectTrendCharts() {
+    const insights = (this.data.enhancedDetail && this.data.enhancedDetail.subjectInsights) || []
+    if (!insights.length) return
+    const query = wx.createSelectorQuery()
+    query.selectAll('.enhanced-subject-trend-canvas').fields({ node: true, size: true }).exec((res) => {
+      const nodes = res && res[0]
+      if (!nodes || !nodes.length) return
+      nodes.forEach((target, index) => {
+        const insight = insights[index]
+        if (!target || !target.node || !insight || !Array.isArray(insight.trend_points) || !insight.trend_points.length) return
+        drawLineChart(target.node, target.width, target.height, insight.trend_points, {
+          lineColor: '#0ea5e9',
+          pointColor: '#0284c7',
+          showLabels: false,
+          pointRadius: 3,
+          lineWidth: 2,
+          padding: { top: 14, right: 14, bottom: 24, left: 34 }
+        })
+      })
     })
   },
 
@@ -1008,10 +1117,11 @@ Page({
       })
       this.setData({
         enhancedReport,
-        enhancedDetail: buildEnhancedDetailSections(enhancedReport),
+        enhancedDetail: buildEnhancedDetailSections(enhancedReport, this.data.subjectTrendRows || []),
         enhancedJobStatus: 'done',
         enhancedDebugHint: buildEnhancedDebugHint('done', this.data.enhancedJobElapsedMs || 0, pendingMaterials.length, pendingMaterials.filter((item) => item.mode === 'upload').length)
       })
+      wx.nextTick(() => this.renderEnhancedSubjectTrendCharts())
     } catch (error) {
       if (this._pageAlive !== false) {
         this.setEnhancedProgress(3, '增强分析出现异常，系统已自动切换到规则报告。已上传材料不会丢失。')
@@ -1048,9 +1158,17 @@ Page({
             elective_note: fallback.electiveNote,
             disclaimer: '增强分析基于当前成绩和已上传材料生成，不能替代试卷讲评、学校政策和教师判断。'
           },
-          enhancedDetail: fallback
+          enhancedDetail: buildEnhancedDetailSections({
+            subject_insights: [],
+            subject_gap_analysis: fallback.subjectGapAnalysis,
+            strength_breakthroughs: fallback.strengthBreakthroughs,
+            risk_alerts: fallback.riskAlerts,
+            followup_materials: fallback.followupMaterials,
+            elective_note: fallback.electiveNote
+          }, this.data.subjectTrendRows || [])
         })
         this.setEnhancedProgress(4, '已切换到规则兜底分析，当前结果可继续查看。')
+        wx.nextTick(() => this.renderEnhancedSubjectTrendCharts())
       }
     } finally {
       this.setData({

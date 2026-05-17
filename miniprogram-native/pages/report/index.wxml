@@ -195,15 +195,22 @@
         <text class="trend-warn-text">重要：没有在图片或描述中出现的知识点，AI 不允许自行猜测；材料不足时只说明“无法判断具体失分点”。</text>
       </view>
       <view class="debug-card">
-        <view class="debug-card-title">增强分析调试信息</view>
-        <view class="debug-card-text">{{enhancedDebugHint || '等待开始生成增强分析。'}}</view>
-        <view class="debug-meta">
-          <text>任务：{{enhancedJobId || '未提交'}}</text>
-          <text>状态：{{enhancedJobStatus || '未开始'}}</text>
-          <text>耗时：{{enhancedJobElapsedText || '0 秒'}}</text>
-          <text>材料：{{enhancedMaterialCount}} 份 / 图片 {{enhancedImageCount}} 份</text>
+        <view class="debug-card-head" bindtap="toggleEnhancedDebugSection">
+          <view class="debug-card-title">增强分析调试信息</view>
+          <text class="debug-card-arrow">{{enhancedDebugExpanded ? '∧' : '∨'}}</text>
         </view>
-        <view wx:if="{{enhancedJobError}}" class="debug-error">错误：{{enhancedJobError}}</view>
+        <view wx:if="{{enhancedDebugExpanded}}" class="debug-card-body">
+          <view class="debug-card-text">{{enhancedDebugHint || '等待开始生成增强分析。'}}</view>
+          <view class="debug-meta">
+            <text>任务：{{enhancedJobId || '未提交'}}</text>
+            <text>状态：{{enhancedJobStatus || '未开始'}}</text>
+            <text>耗时：{{enhancedJobElapsedText || '0 秒'}}</text>
+            <text>材料：{{enhancedMaterialCount}} 份 / 图片 {{enhancedImageCount}} 份</text>
+            <text>模型：{{enhancedModelName || 'qwen3.6-flash'}}</text>
+            <text>使用：{{enhancedModelUsage || '系统默认 · 分析 qwen3.6-flash / OCR qwen3.6-flash'}}</text>
+          </view>
+          <view wx:if="{{enhancedJobError}}" class="debug-error">错误：{{enhancedJobError}}</view>
+        </view>
       </view>
 
       <view wx:if="{{!enhancedReport}}" class="material-panel {{materialPanelExpanded ? 'expanded' : 'collapsed'}}">
@@ -282,26 +289,38 @@
             <view class="score-main">{{insight.name}}</view>
             <view class="tag tag-blue">{{insight.trend_judgment}}</view>
           </view>
-          <view wx:if="{{insight.analysis_summary}}" class="analysis-summary">{{insight.analysis_summary}}</view>
           <view wx:if="{{insight.analysis_rows && insight.analysis_rows.length}}" class="analysis-table">
             <view class="analysis-table-head">
               <text>内容</text>
               <text>得分</text>
               <text>总分</text>
               <text>得分率</text>
+              <text>变化趋势</text>
             </view>
             <view wx:for="{{insight.analysis_rows}}" wx:for-item="row" wx:key="index" class="analysis-table-row">
               <text class="analysis-table-content">{{row.content}}</text>
               <text>{{row.score}}</text>
               <text>{{row.full_score}}</text>
               <text class="text-good">{{row.rate}}%</text>
+              <text class="analysis-table-trend {{row.trend_class || 'text-gray-400'}}">{{row.trend || '—'}}</text>
+            </view>
+          </view>
+          <view wx:if="{{insight.trend_points && insight.trend_points.length}}" class="subject-trend-block">
+            <view class="subject-trend-title">该科目成绩变化趋势</view>
+            <canvas type="2d" class="enhanced-subject-trend-canvas"></canvas>
+            <view class="trend-axis-labels">
+              <text>时间</text>
+              <text>分数</text>
             </view>
           </view>
           <view wx:if="{{insight.section_advice && insight.section_advice.length}}" class="section-advice-list">
             <view class="section-advice-title">章节独立建议</view>
-            <view wx:if="{{insight.action}}" class="section-advice-lead">下一步：{{insight.action}}</view>
-            <view wx:for="{{insight.section_advice}}" wx:key="index" class="section-advice-item">{{item}}</view>
-            <view wx:if="{{insight.next_target}}" class="section-advice-footer">下次目标：{{insight.next_target}}</view>
+            <view wx:for="{{insight.section_advice}}" wx:for-item="advice" wx:key="index" class="section-advice-item">
+              <view class="section-advice-item-bullet">•</view>
+              <view class="section-advice-item-body">{{advice}}</view>
+            </view>
+            <view wx:if="{{insight.action}}" class="section-advice-footer">下一步：{{insight.action}}</view>
+            <view wx:if="{{insight.next_target}}" class="section-advice-footer section-advice-target">下次目标：{{insight.next_target}}</view>
           </view>
         </view>
       </view>

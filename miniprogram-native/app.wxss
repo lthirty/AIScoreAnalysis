@@ -610,8 +610,8 @@ button.secondary {
 .analysis-table-head,
 .analysis-table-row {
   display: grid;
-  gap: 8rpx;
-  grid-template-columns: 1.35fr 0.75fr 0.75fr 0.85fr;
+  gap: 6rpx;
+  grid-template-columns: 1.3fr 0.7fr 0.7fr 0.8fr 0.75fr;
 }
 
 .analysis-table-head {
@@ -629,7 +629,18 @@ button.secondary {
   padding: 12rpx 14rpx;
 }
 
+.analysis-table-head text,
+.analysis-table-row text {
+  text-align: center;
+}
+
 .analysis-table-content {
+  font-weight: 700;
+  text-align: left;
+  word-break: break-all;
+}
+
+.analysis-table-trend {
   font-weight: 700;
 }
 
